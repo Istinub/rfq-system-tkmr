@@ -1,0 +1,28 @@
+{
+  "name": "rfq-system-tkmr",
+  "version": "1.0.0",
+  "description": "A system to Request For Quotation for the company of TKMR",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend",
+    "shared"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "build": "npm run build --workspaces --if-present",
+    "build:backend": "npm run build --workspace=backend",
+    "build:frontend": "npm run build --workspace=frontend",
+    "build:shared": "npm run build --workspace=shared",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "keywords": [
+    "rfq",
+    "quotation",
+    "monorepo"
+  ],
+  "author": "",
+  "license": "ISC"
+}

@@ -1,0 +1,31 @@
+{
+  "name": "@rfq-system/frontend",
+  "version": "1.0.0",
+  "description": "Frontend for RFQ system using Quasar",
+  "scripts": {
+    "dev": "quasar dev",
+    "build": "quasar build",
+    "lint": "eslint --ext .js,.ts,.vue ./src"
+  },
+  "dependencies": {
+    "@rfq-system/shared": "*",
+    "@quasar/extras": "^1.16.9",
+    "axios": "^1.6.5",
+    "quasar": "^2.14.1",
+    "vue": "^3.4.15",
+    "vue-router": "^4.2.5"
+  },
+  "devDependencies": {
+    "@quasar/app-vite": "^1.7.3",
+    "@types/node": "^20.10.6",
+    "@typescript-eslint/eslint-plugin": "^6.18.0",
+    "@typescript-eslint/parser": "^6.18.0",
+    "eslint": "^8.56.0",
+    "eslint-plugin-vue": "^9.19.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": "^18 || ^20 || ^21",
+    "npm": ">= 9.0.0"
+  }
+}
