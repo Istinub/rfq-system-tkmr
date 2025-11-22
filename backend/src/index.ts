@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { healthRouter } from './routes/health';
 import { secureRouter } from './routes/secure';
+import rfqRouter from './routes/rfq.routes';
 
 // Load environment variables
 dotenv.config();
@@ -18,6 +19,7 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/health', healthRouter);
 app.use('/api/secure', secureRouter);
+app.use('/api/rfq', rfqRouter);
 
 // Root endpoint
 app.get('/', (req: Request, res: Response) => {
@@ -26,7 +28,8 @@ app.get('/', (req: Request, res: Response) => {
     version: '1.0.0',
     endpoints: {
       health: '/health',
-      secure: '/api/secure'
+      secure: '/api/secure',
+      rfq: '/api/rfq'
     }
   });
 });
