@@ -1,37 +1,19 @@
-/**
- * RFQ (Request for Quotation) types
- */
+import type { RFQ, RFQContact } from './schemas/rfq.schema.js';
+import type { RFQItem } from './schemas/rfqItem.schema.js';
+import type { SecureLink } from './schemas/secureLink.schema.js';
 
-export interface RFQItem {
-  id: string;
-  productName: string;
-  quantity: number;
-  unit: string;
-  description?: string;
-}
+export type { RFQ, RFQItem, RFQContact, SecureLink };
 
-export interface RFQ {
-  id: string;
-  companyName: string;
-  contactEmail: string;
-  contactPhone?: string;
-  items: RFQItem[];
-  notes?: string;
-  createdAt: Date;
-  status: 'pending' | 'submitted' | 'processing' | 'completed' | 'cancelled';
-}
-
-export interface CreateRFQRequest {
-  companyName: string;
-  contactEmail: string;
-  contactPhone?: string;
-  items: Omit<RFQItem, 'id'>[];
-  notes?: string;
-}
-
-export interface RFQResponse {
-  success: boolean;
-  data?: RFQ;
-  error?: string;
+export interface ApiSuccess<T> {
+  success: true;
+  data: T;
   message?: string;
 }
+
+export interface ApiErrorResponse {
+  success: false;
+  error: string;
+  message?: string;
+}
+
+export type ApiResponse<T> = ApiSuccess<T> | ApiErrorResponse;

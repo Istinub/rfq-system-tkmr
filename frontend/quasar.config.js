@@ -9,6 +9,10 @@
 // https://v2.quasar.dev/quasar-cli-vite/quasar-config-js
 
 import { configure } from 'quasar/wrappers';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default configure(function (/* ctx */) {
   return {
@@ -33,6 +37,13 @@ export default configure(function (/* ctx */) {
       },
 
       vueRouterMode: 'hash',
+      extendViteConf(viteConf) {
+        viteConf.resolve = viteConf.resolve || {};
+        viteConf.resolve.alias = {
+          ...(viteConf.resolve.alias ?? {}),
+          '@rfq-system/shared': resolve(__dirname, '../shared/src'),
+        };
+      },
     },
 
     devServer: {

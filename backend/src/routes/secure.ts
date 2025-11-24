@@ -1,5 +1,5 @@
-import { Router, Request, Response } from 'express';
-import { CreateRFQRequest, RFQResponse } from '@rfq-system-tkmr/shared';
+import { Router, type Request, type Response } from 'express';
+import type { RFQ } from '@rfq-system/shared';
 
 export const secureRouter = Router();
 
@@ -71,9 +71,20 @@ secureRouter.get('/verify/:token', (req: Request, res: Response) => {
 });
 
 // Submit RFQ via secure link
+interface RFQSubmissionResponse {
+  success: boolean;
+  data: RFQ & {
+    id: string;
+    createdAt: string;
+    status: 'submitted';
+    items: Array<RFQ['items'][number] & { id: string }>;
+  };
+  message: string;
+}
+
 secureRouter.post('/submit/:token', (req: Request, res: Response) => {
   const { token } = req.params;
-  const rfqData: CreateRFQRequest = req.body;
+  const rfqData = req.body as RFQ;
 
   if (!token) {
     return res.status(400).json({
@@ -84,7 +95,7 @@ secureRouter.post('/submit/:token', (req: Request, res: Response) => {
   }
 
   // Placeholder submission (In production, save to database)
-  const response: RFQResponse = {
+  const response: RFQSubmissionResponse = {
     success: true,
     data: {
       id: `rfq-${Date.now()}`,
@@ -93,7 +104,7 @@ secureRouter.post('/submit/:token', (req: Request, res: Response) => {
         id: `item-${index + 1}`,
         ...item
       })),
-      createdAt: new Date(),
+      createdAt: new Date().toISOString(),
       status: 'submitted'
     },
     message: 'RFQ submitted successfully'

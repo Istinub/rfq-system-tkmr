@@ -10,4 +10,4 @@ export const SecureLinkSchema = z.object({
   rfqId: z.string().min(1, 'RFQ ID is required'),
 });
 
-export type SecureLinkPayload = z.infer<typeof SecureLinkSchema>;
+export type SecureLink = z.infer<typeof SecureLinkSchema>;

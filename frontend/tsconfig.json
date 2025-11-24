@@ -14,7 +14,9 @@
       "pages/*": ["src/pages/*"],
       "assets/*": ["src/assets/*"],
       "boot/*": ["src/boot/*"],
-      "stores/*": ["src/stores/*"]
+      "stores/*": ["src/stores/*"],
+      "@rfq-system/shared": ["../shared/dist"],
+      "@rfq-system/shared/*": ["../shared/dist/*"]
     },
     "strict": true,
     "esModuleInterop": true,

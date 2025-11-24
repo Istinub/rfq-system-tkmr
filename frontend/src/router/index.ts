@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory, RouteRecordRaw } from 'vue-router';
 import MainLayout from '../layouts/MainLayout.vue';
 import RFQFormPage from '../pages/RFQFormPage.vue';
+import SecureLinkPage from '../pages/SecureLinkPage.vue';
 
 const routes: RouteRecordRaw[] = [
   {
@@ -13,9 +14,9 @@ const routes: RouteRecordRaw[] = [
         component: RFQFormPage,
       },
       {
-        path: 'rfq/:token?',
-        name: 'rfq-form',
-        component: RFQFormPage,
+        path: 'rfq/:token',
+        name: 'secure-rfq',
+        component: SecureLinkPage,
       },
     ],
   },
