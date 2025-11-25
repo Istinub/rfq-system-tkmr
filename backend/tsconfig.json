@@ -16,7 +16,6 @@
     "baseUrl": ".",
     "paths": {
       "@rfq-system/shared": ["../shared/dist"],
-      "@rfq-system/shared/backend": ["../shared/dist/backend"],
       "@rfq-system/shared/*": ["../shared/dist/*"]
     }
   },

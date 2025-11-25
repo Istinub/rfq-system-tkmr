@@ -16,10 +16,20 @@ This monorepo contains three interconnected packages:
 rfq-system-tkmr/
 ├── backend/              # Express API server
 │   ├── src/
-│   │   ├── index.ts     # Main server entry point
-│   │   └── routes/
-│   │       ├── health.ts    # Health check endpoints
-│   │       └── secure.ts    # Secure link API (placeholder)
+│   │   ├── index.ts                # Main server entry point
+│   │   ├── controllers/
+│   │   │   ├── rfq.controller.ts   # RFQ CRUD and secure-link creation
+│   │   │   └── secureLink.controller.ts # Secure-link retrieval logic
+│   │   ├── routes/
+│   │   │   ├── health.ts           # Legacy health router (deprecated)
+│   │   │   ├── health.routes.ts    # Health check endpoints
+│   │   │   ├── rfq.routes.ts       # RFQ REST API
+│   │   │   └── secureLink.routes.ts# Secure-link lookup API
+│   │   └── services/
+│   │       ├── rfq.service.ts      # RFQ persistence + secure link binding
+│   │       └── secureLink.service.ts # In-memory secure-link store & audit logs
+│   ├── tests/
+│   │   └── rfq.byToken.test.ts     # Jest + Supertest coverage for secure links
 │   ├── package.json
 │   └── tsconfig.json
 ├── frontend/             # Quasar web application
@@ -35,9 +45,11 @@ rfq-system-tkmr/
 │   └── quasar.config.js
 ├── shared/               # Shared types and utilities
 │   ├── src/
-│   │   ├── index.ts     # Main exports
-│   │   ├── types.ts     # TypeScript interfaces
-│   │   └── validation.ts # Validation utilities (placeholder)
+│   │   ├── index.ts                 # Main exports (frontend-safe + backend helpers)
+│   │   ├── types.ts                 # Global TypeScript response helpers
+│   │   ├── types/secureLink.types.ts# Secure-link specific types
+│   │   ├── schemas/                 # Zod schemas for RFQ + secure links
+│   │   └── utils/                   # generateToken + validate middleware
 │   ├── package.json
 │   └── tsconfig.json
 ├── package.json          # Root workspace configuration
@@ -79,10 +91,13 @@ npm run build --workspace=shared
 
 ### Backend Development
 
-Start the backend development server:
+Start the backend development server (ensure the shared package is built first):
 
 ```bash
-cd backend
+cd shared
+npm run build
+
+cd ../backend
 npm run dev
 ```
 
@@ -90,12 +105,13 @@ The API will be available at `http://localhost:3000`
 
 #### Available Endpoints
 
-- `GET /` - API information
+- `GET /` - API information payload
 - `GET /health` - Basic health check
 - `GET /health/detailed` - Detailed health check
-- `POST /api/secure/generate-link` - Generate secure RFQ link (placeholder)
-- `GET /api/secure/verify/:token` - Verify secure token (placeholder)
-- `POST /api/secure/submit/:token` - Submit RFQ via secure link (placeholder)
+- `POST /api/rfq` - Create a new RFQ request
+- `POST /api/rfq/:id/secure-link` - Generate a secure access link for an RFQ
+- `GET /api/rfq/by-token/:token` - Retrieve an RFQ by secure token (used by frontend)
+- `GET /api/secure/:token` - Secure-link RFQ retrieval with access logging
 
 ### Frontend Development
 
@@ -110,10 +126,13 @@ The application will be available at `http://localhost:9000`
 
 ### Shared Package Development
 
-Build shared package in watch mode:
+Build the shared package (required before running backend Jest tests or dev server):
 
 ```bash
 cd shared
+npm run build
+
+# or watch for changes
 npm run dev
 ```
 
@@ -123,10 +142,11 @@ npm run dev
 
 Express API server with:
 - TypeScript support
-- `/health` endpoint for monitoring
-- Secure link API placeholder for future RFQ submission
-- CORS enabled
-- Environment variable support
+- `/health` endpoints for monitoring
+- Secure-link lifecycle: creation, validation, audit logging
+- RFQ submission + secure-link generation controllers
+- Jest + Supertest test suite for secure-link retrieval
+- CORS enabled and environment variable support
 
 **Key Dependencies:**
 - express
@@ -138,10 +158,10 @@ Express API server with:
 
 Quasar Framework application with:
 - Vue 3 + TypeScript
-- Responsive RFQ form page
-- Material Design components
-- Form validation
-- Success notifications
+- Responsive RFQ form page + secure-link viewer
+- Material Design components & global layouts
+- Form validation backed by shared Zod schemas
+- Success and error notifications
 
 **Key Dependencies:**
 - quasar
@@ -153,17 +173,22 @@ Quasar Framework application with:
 ### Shared (@rfq-system-tkmr/shared)
 
 Common utilities and types:
-- TypeScript type definitions for RFQ entities
-- Validation utilities (placeholder for Zod/Joi)
-- Shared interfaces between frontend and backend
+- Zod schemas for RFQs, RFQ items, and secure links
+- Secure-link types (`SecureLink`, `SecureLinkValidationResult`, etc.)
+- Shared Axios validation helpers (`validate`)
+- Cryptographically secure token generation helper (`generateToken`)
 
 ## 🧪 Testing
 
-Run tests for all workspaces:
+Run backend tests (Jest + Supertest):
 
 ```bash
-npm test
+# ensure shared has been built first
+npm run build --workspace=shared
+npm run test --workspace=backend
 ```
+
+Frontend testing is not yet configured; placeholder scripts are present.
 
 ## 🔍 Linting
 
@@ -219,14 +244,14 @@ npm run build
 
 ## 🛠️ Future Enhancements
 
-- [ ] Implement proper secure link generation with expiry
+- [x] Implement secure link generation with expiry and access logging
 - [ ] Add database integration (PostgreSQL/MongoDB)
 - [ ] Implement complete validation with Zod or Joi
 - [ ] Add authentication system
 - [ ] Create admin dashboard
 - [ ] Add email notifications
 - [ ] Implement file upload for attachments
-- [ ] Add unit and integration tests
+- [ ] Add frontend unit and integration tests
 - [ ] Set up CI/CD pipeline
 
 ## 📄 License

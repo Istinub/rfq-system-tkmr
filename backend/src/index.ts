@@ -2,7 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { healthRouter } from './routes/health';
-import { secureRouter } from './routes/secure';
+import secureLinkRouter from './routes/secureLink.routes';
 import rfqRouter from './routes/rfq.routes';
 
 // Load environment variables
@@ -18,7 +18,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/health', healthRouter);
-app.use('/api/secure', secureRouter);
+app.use('/api/secure', secureLinkRouter);
 app.use('/api/rfq', rfqRouter);
 
 // Root endpoint

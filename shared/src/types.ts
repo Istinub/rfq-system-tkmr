@@ -1,6 +1,6 @@
-import type { RFQ, RFQContact } from './schemas/rfq.schema.js';
-import type { RFQItem } from './schemas/rfqItem.schema.js';
-import type { SecureLink } from './schemas/secureLink.schema.js';
+import type { RFQ, RFQContact } from './schemas/rfq.schema';
+import type { RFQItem } from './schemas/rfqItem.schema';
+import type { SecureLink } from './types/secureLink.types';
 
 export type { RFQ, RFQItem, RFQContact, SecureLink };
 

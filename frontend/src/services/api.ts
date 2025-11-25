@@ -34,6 +34,30 @@ const CreateRFQResponseSchema = z.object({
 
 export type CreateRFQResponse = z.infer<typeof CreateRFQResponseSchema>;
 
+const SecureLinkMetadataSchema = z.object({
+  token: z.string().min(1),
+  createdAt: z.string().min(1),
+  expires: z.string().min(1),
+  oneTime: z.boolean(),
+  firstAccessAt: z.string().min(1).nullable(),
+  accessCount: z.number().int().nonnegative(),
+  accessLogs: z.array(
+    z.object({
+      time: z.string().min(1),
+      ip: z.string().optional(),
+      userAgent: z.string().optional(),
+    })
+  ),
+});
+
+const SecureLinkDetailsResponseSchema = z.object({
+  rfq: RFQSchema,
+  link: SecureLinkMetadataSchema,
+});
+
+export type SecureLinkMetadata = z.infer<typeof SecureLinkMetadataSchema>;
+export type SecureLinkDetailsResponse = z.infer<typeof SecureLinkDetailsResponseSchema>;
+
 const extractErrorMessage = (error: AxiosError): string => {
   const { response, message: fallbackMessage } = error;
 
@@ -97,7 +121,7 @@ export const createRFQ = async (rfq: RFQ): Promise<CreateRFQResponse> => {
   return parsed.data;
 };
 
-export const getRFQByToken = async (token: string): Promise<RFQ> => {
+export const getSecureLinkDetails = async (token: string): Promise<SecureLinkDetailsResponse> => {
   const trimmedToken = token.trim();
 
   if (!trimmedToken) {
@@ -105,11 +129,11 @@ export const getRFQByToken = async (token: string): Promise<RFQ> => {
   }
 
   try {
-    const { data } = await apiClient.get(`/rfq/by-token/${encodeURIComponent(trimmedToken)}`);
-    const parsed = RFQSchema.safeParse(data);
+    const { data } = await apiClient.get(`/secure/${encodeURIComponent(trimmedToken)}`);
+    const parsed = SecureLinkDetailsResponseSchema.safeParse(data);
 
     if (!parsed.success) {
-      throw new ApiError('Invalid RFQ payload received', 500, parsed.error.flatten());
+      throw new ApiError('Invalid secure link payload received', 500, parsed.error.flatten());
     }
 
     return parsed.data;
@@ -136,7 +160,7 @@ export const getRFQByToken = async (token: string): Promise<RFQ> => {
       throw error;
     }
 
-    throw new ApiError('Unable to load RFQ details');
+    throw new ApiError('Unable to load secure link details');
   }
 };
 

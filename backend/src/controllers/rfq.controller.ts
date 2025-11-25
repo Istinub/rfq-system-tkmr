@@ -35,15 +35,18 @@ export const generateSecureLink: RequestHandler = (req, res) => {
   }
 
   try {
-    const secureLink = RFQService.createSecureLink(id, getSecureLinkTTL());
+    const { oneTime = false } = (req.body as { oneTime?: boolean }) ?? {};
+    const secureLink = RFQService.createSecureLink(id, getSecureLinkTTL(), { oneTime });
 
-    const payload = {
-      token: secureLink.token,
-      expires: new Date(secureLink.expires).toISOString(),
-      rfqId: secureLink.id,
-    };
+    if (!secureLink.metadata) {
+      res.status(500).json({
+        success: false,
+        error: 'Unable to generate secure link metadata',
+      });
+      return;
+    }
 
-    const validation = SecureLinkSchema.safeParse(payload);
+    const validation = SecureLinkSchema.safeParse(secureLink.metadata);
 
     if (!validation.success) {
       res.status(500).json({

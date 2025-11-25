@@ -81,6 +81,63 @@
                   </q-item>
                 </q-list>
               </section>
+
+              <section v-if="link">
+                <div class="text-h6 text-weight-bold q-mb-sm">Secure Link Details</div>
+                <q-list bordered>
+                  <q-item>
+                    <q-item-section>
+                      <q-item-label caption>Created</q-item-label>
+                      <q-item-label>{{ formatDateTime(link.createdAt) }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item>
+                    <q-item-section>
+                      <q-item-label caption>Expires</q-item-label>
+                      <q-item-label>{{ formatDateTime(link.expires) }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item>
+                    <q-item-section>
+                      <q-item-label caption>One-Time Access</q-item-label>
+                      <q-item-label>{{ formatBoolean(link.oneTime) }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item>
+                    <q-item-section>
+                      <q-item-label caption>First Access</q-item-label>
+                      <q-item-label>{{ formatDateTime(link.firstAccessAt) }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item>
+                    <q-item-section>
+                      <q-item-label caption>Access Count</q-item-label>
+                      <q-item-label>{{ link.accessCount }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+
+                <div class="q-mt-lg">
+                  <div class="text-subtitle1 text-weight-bold q-mb-sm">Access Logs</div>
+                  <div v-if="!hasAccessLogs" class="text-body2 text-grey-7">No access requests recorded yet.</div>
+                  <q-markup-table v-else flat bordered>
+                    <thead>
+                      <tr>
+                        <th class="text-left">Time</th>
+                        <th class="text-left">IP Address</th>
+                        <th class="text-left">User Agent</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(entry, index) in accessLogs" :key="index">
+                        <td>{{ formatDateTime(entry.time) }}</td>
+                        <td>{{ entry.ip ?? '—' }}</td>
+                        <td>{{ entry.userAgent ?? '—' }}</td>
+                      </tr>
+                    </tbody>
+                  </q-markup-table>
+                </div>
+              </section>
             </div>
           </q-card-section>
 
@@ -100,11 +157,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { getRFQByToken } from '../services/api';
+import { getSecureLinkDetails, type SecureLinkDetailsResponse } from '../services/api';
 import type { RFQ } from '@rfq-system/shared';
 
 const route = useRoute();
 const rfq = ref<RFQ | null>(null);
+const link = ref<SecureLinkDetailsResponse['link'] | null>(null);
 const isLoading = ref(false);
 const errorMessage = ref<string | null>(null);
 
@@ -113,17 +171,22 @@ const token = computed(() => {
   return typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : null;
 });
 
-const tokenDisplay = computed(() => token.value ?? 'N/A');
+const tokenDisplay = computed(() => link.value?.token ?? token.value ?? 'N/A');
+const accessLogs = computed(() => link.value?.accessLogs ?? []);
+const hasAccessLogs = computed(() => accessLogs.value.length > 0);
 
-const fetchRFQ = async (secureToken: string) => {
+const fetchSecureLink = async (secureToken: string) => {
   isLoading.value = true;
   errorMessage.value = null;
 
   try {
-    rfq.value = await getRFQByToken(secureToken);
+    const result = await getSecureLinkDetails(secureToken);
+    rfq.value = result.rfq;
+    link.value = result.link;
   } catch (error) {
     rfq.value = null;
-    errorMessage.value = error instanceof Error ? error.message : 'Unable to load RFQ details';
+    link.value = null;
+    errorMessage.value = error instanceof Error ? error.message : 'Unable to load secure link details';
   } finally {
     isLoading.value = false;
   }
@@ -137,9 +200,26 @@ const formatCurrency = (value: number): string => {
   }).format(value);
 };
 
+const formatDateTime = (value: string | null | undefined): string => {
+  if (!value) {
+    return '—';
+  }
+
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(value));
+  } catch (error) {
+    return value;
+  }
+};
+
+const formatBoolean = (value: boolean): string => (value ? 'Yes' : 'No');
+
 onMounted(() => {
   if (token.value) {
-    void fetchRFQ(token.value);
+    void fetchSecureLink(token.value);
   } else {
     errorMessage.value = 'Secure token missing.';
   }
@@ -149,7 +229,7 @@ watch(
   () => token.value,
   (next, prev) => {
     if (next && next !== prev) {
-      void fetchRFQ(next);
+      void fetchSecureLink(next);
     }
   }
 );

@@ -42,6 +42,7 @@ describe('GET /api/rfq/by-token/:token', () => {
 
     const secureLinkResponse = await request(app)
       .post(`/api/rfq/${rfqId}/secure-link`)
+      .send({})
       .expect(201);
 
     const token: string = secureLinkResponse.body.data.token;
@@ -50,6 +51,54 @@ describe('GET /api/rfq/by-token/:token', () => {
 
     expect(status).toBe(200);
     expect(body).toEqual(rfqPayload);
+  });
+
+  it('returns secure link metadata when generating a link', async () => {
+    const rfqPayload = buildRFQ();
+
+    const createResponse = await request(app)
+      .post('/api/rfq')
+      .send(rfqPayload)
+      .expect(201);
+
+    const rfqId: string = createResponse.body.data.id;
+
+    const secureLinkResponse = await request(app)
+      .post(`/api/rfq/${rfqId}/secure-link`)
+      .send({})
+      .expect(201);
+
+    const payload = secureLinkResponse.body.data;
+
+    expect(payload.token).toEqual(expect.any(String));
+    expect(payload.url).toContain(payload.token);
+    expect(payload.rfqId).toBe(rfqId);
+    expect(Number.isNaN(Date.parse(payload.createdAt))).toBe(false);
+    expect(Number.isNaN(Date.parse(payload.expires))).toBe(false);
+    expect(payload.oneTime).toBe(false);
+    expect(payload.firstAccessAt).toBeNull();
+    expect(payload.accessCount).toBe(0);
+    expect(payload.accessLogs).toEqual([]);
+  });
+
+  it('allows generating one-time secure links', async () => {
+    const rfqPayload = buildRFQ();
+
+    const createResponse = await request(app)
+      .post('/api/rfq')
+      .send(rfqPayload)
+      .expect(201);
+
+    const rfqId: string = createResponse.body.data.id;
+
+    const secureLinkResponse = await request(app)
+      .post(`/api/rfq/${rfqId}/secure-link`)
+      .send({ oneTime: true })
+      .expect(201);
+
+    const payload = secureLinkResponse.body.data;
+
+    expect(payload.oneTime).toBe(true);
   });
 
   it('returns 404 when the token does not exist', async () => {

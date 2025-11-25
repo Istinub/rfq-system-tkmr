@@ -1,5 +1,5 @@
-import { generateToken } from '@rfq-system/shared/backend';
-import type { RFQ } from '@rfq-system/shared';
+import type { RFQ, SecureLink } from '@rfq-system/shared';
+import { SecureLinkService } from './secureLink.service';
 
 export type RFQStatus = 'pending' | 'submitted' | 'processing' | 'completed' | 'cancelled';
 
@@ -19,6 +19,7 @@ export interface RFQRecord {
 export interface SecureLinkRecord extends SecureLinkDetails {
   id: string;
   rfq: RFQ;
+  metadata?: SecureLink;
 }
 
 const rfqStore = new Map<string, RFQRecord>();
@@ -38,27 +39,6 @@ const createRecord = (rfq: RFQ): RFQRecord => {
   return record;
 };
 
-const upsertSecureLink = (record: RFQRecord, ttlMs: number): SecureLinkRecord => {
-  if (record.secureLink) {
-    tokenIndex.delete(record.secureLink.token);
-  }
-
-  const token = generateToken();
-  const secureLink: SecureLinkDetails = {
-    token,
-    expires: Date.now() + ttlMs,
-  };
-
-  record.secureLink = secureLink;
-  tokenIndex.set(token, record);
-
-  return {
-    id: record.id,
-    rfq: record.rfq,
-    ...secureLink,
-  };
-};
-
 export const RFQService = {
   getAll(): RFQRecord[] {
     return Array.from(rfqStore.values());
@@ -72,14 +52,37 @@ export const RFQService = {
     return rfqStore.get(id);
   },
 
-  createSecureLink(rfqId: string, ttlMs: number): SecureLinkRecord {
+  getById(id: string): RFQRecord | undefined {
+    return rfqStore.get(id);
+  },
+
+  createSecureLink(rfqId: string, ttlMs: number, options?: { oneTime?: boolean }): SecureLinkRecord {
     const record = rfqStore.get(rfqId);
 
     if (!record) {
       throw new Error('RFQ not found');
     }
 
-    return upsertSecureLink(record, ttlMs);
+    const secureLink = SecureLinkService.create(record.id, {
+      ttlMs,
+      oneTime: options?.oneTime ?? false,
+    });
+    const expires = new Date(secureLink.expires).getTime();
+
+    record.secureLink = {
+      token: secureLink.token,
+      expires,
+    };
+
+    tokenIndex.set(secureLink.token, record);
+
+    return {
+      id: record.id,
+      rfq: record.rfq,
+      token: secureLink.token,
+      expires,
+      metadata: secureLink,
+    };
   },
 
   findByToken(token: string): SecureLinkRecord | undefined {
@@ -93,6 +96,7 @@ export const RFQService = {
       id: record.id,
       rfq: record.rfq,
       ...record.secureLink,
+      metadata: SecureLinkService.get(record.secureLink.token),
     };
   },
 
@@ -100,5 +104,6 @@ export const RFQService = {
     rfqStore.clear();
     tokenIndex.clear();
     sequence = 1;
+    SecureLinkService.reset();
   },
 };
