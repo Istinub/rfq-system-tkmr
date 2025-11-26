@@ -1,5 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
-import cors from 'cors';
+import cors, { type CorsOptions } from 'cors';
 import dotenv from 'dotenv';
 import { healthRouter } from './routes/health';
 import secureLinkRouter from './routes/secureLink.routes';
@@ -9,10 +9,17 @@ import rfqRouter from './routes/rfq.routes';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number.parseInt(process.env.PORT ?? '', 10) || 5000;
+
+const resolvedCorsOrigins = (process.env.CORS_ORIGINS ?? '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter((origin) => origin.length > 0);
+
+const corsOptions: CorsOptions = resolvedCorsOrigins.length > 0 ? { origin: resolvedCorsOrigins } : {};
 
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -53,9 +60,15 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
-    console.log(`🚀 Server is running on http://localhost:${PORT}`);
-    console.log(`📊 Health check: http://localhost:${PORT}/health`);
-    console.log(`🔐 Secure API: http://localhost:${PORT}/api/secure`);
+    const envName = process.env.NODE_ENV ?? 'development';
+    const originsLog = resolvedCorsOrigins.length > 0 ? resolvedCorsOrigins.join(', ') : 'All origins (*)';
+
+    console.log('🚀 RFQ System backend ready');
+    console.log(`   Environment : ${envName}`);
+    console.log(`   Listening   : 0.0.0.0:${PORT}`);
+    console.log(`   Health      : /health`);
+    console.log(`   Secure API  : /api/secure`);
+    console.log(`   CORS origin : ${originsLog}`);
   });
 }
 

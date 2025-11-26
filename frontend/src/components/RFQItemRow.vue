@@ -43,6 +43,51 @@
             />
           </div>
         </div>
+
+        <div class="row q-col-gutter-md">
+          <div class="col-12 col-md-6">
+            <q-input
+              outlined
+              v-model="localItem.availability"
+              label="Availability"
+              placeholder="e.g., In stock, 2 weeks lead"
+            />
+          </div>
+          <div class="col-12 col-sm-6 col-md-3">
+            <q-input
+              outlined
+              type="number"
+              v-model.number="localItem.pricePerUnit"
+              label="Price / Unit"
+              :suffix="currencyLabel"
+              min="0"
+            />
+          </div>
+          <div class="col-12 col-sm-6 col-md-3">
+            <q-input
+              outlined
+              type="number"
+              v-model.number="localItem.discountPercent"
+              label="Discount %"
+              suffix="%"
+              min="0"
+              max="100"
+            />
+          </div>
+        </div>
+
+        <div class="row q-col-gutter-md">
+          <div class="col-12 col-md-6">
+            <q-input
+              outlined
+              type="number"
+              v-model.number="localItem.positionSum"
+              label="Position Sum"
+              :suffix="currencyLabel"
+              min="0"
+            />
+          </div>
+        </div>
       </div>
     </q-card-section>
   </q-card>
@@ -56,6 +101,10 @@ type RFQItemRowModel = {
   description: string;
   quantity: number | null;
   unit: string;
+  availability?: string;
+  pricePerUnit?: number | null;
+  discountPercent?: number | null;
+  positionSum?: number | null;
 };
 
 const props = withDefaults(
@@ -63,9 +112,11 @@ const props = withDefaults(
     item: RFQItemRowModel;
     index: number;
     removable?: boolean;
+    currencyLabel?: string;
   }>(),
   {
     removable: false,
+    currencyLabel: 'USD',
   }
 );
 
@@ -92,10 +143,27 @@ watch(
         ? null
         : Number(value.quantity);
 
+    const priceValue =
+      value.pricePerUnit === null || value.pricePerUnit === undefined || Number.isNaN(Number(value.pricePerUnit))
+        ? null
+        : Number(value.pricePerUnit);
+    const discountValue =
+      value.discountPercent === null || value.discountPercent === undefined || Number.isNaN(Number(value.discountPercent))
+        ? null
+        : Number(value.discountPercent);
+    const positionSumValue =
+      value.positionSum === null || value.positionSum === undefined || Number.isNaN(Number(value.positionSum))
+        ? null
+        : Number(value.positionSum);
+
     emit('update:item', {
       description: value.description,
       quantity: quantityValue,
       unit: value.unit,
+      availability: value.availability,
+      pricePerUnit: priceValue,
+      discountPercent: discountValue,
+      positionSum: positionSumValue,
     });
   },
   { deep: true }
