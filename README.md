@@ -218,6 +218,14 @@ Build all packages for production:
 npm run build
 ```
 
+### Render Deployment
+
+Render build command:
+
+```bash
+npm install --workspaces && npm run build --workspaces
+```
+
 Start the backend server:
 
 ```bash

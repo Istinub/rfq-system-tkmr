@@ -4,6 +4,7 @@
   "description": "Backend API for RFQ System",
   "main": "dist/index.js",
   "scripts": {
+    "prebuild": "npm run build --workspace=@rfq-system/shared",
     "build": "tsc",
     "dev": "nodemon --watch src --exec ts-node src/index.ts",
     "start": "node dist/index.js",
@@ -19,7 +20,7 @@
   "author": "TKMR",
   "license": "ISC",
   "dependencies": {
-    "@rfq-system/shared": "^1.0.0",
+    "@rfq-system/shared": "1.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.21.2",
