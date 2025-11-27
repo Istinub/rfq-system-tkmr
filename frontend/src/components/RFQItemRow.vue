@@ -1,7 +1,7 @@
 <template>
   <q-card flat bordered class="rfq-item-row">
     <q-card-section>
-      <div class="row items-center justify-between q-mb-sm">
+      <div class="row items-center justify-between q-mb-md">
         <div class="text-subtitle1">Item #{{ index + 1 }}</div>
         <q-btn
           v-if="removable"
@@ -14,79 +14,73 @@
         />
       </div>
 
-      <div class="column q-gutter-md">
-        <q-input
-          outlined
-          v-model="localItem.description"
-          label="Description *"
-          :rules="[required]"
-        />
-
-        <div class="row q-col-gutter-md">
-          <div class="col-12 col-md-4">
-            <q-input
-              outlined
-              type="number"
-              v-model.number="localItem.quantity"
-              label="Quantity *"
-              :rules="[required]"
-              min="1"
-            />
-          </div>
-          <div class="col-12 col-md-8">
-            <q-input
-              outlined
-              v-model="localItem.unit"
-              label="Unit *"
-              placeholder="e.g., pcs, kg, m"
-              :rules="[required]"
-            />
-          </div>
+      <div class="row q-col-gutter-md">
+        <div class="col-12">
+          <q-input outlined v-model="localItem.description" label="Description *" :rules="[required]" />
         </div>
+      </div>
 
-        <div class="row q-col-gutter-md">
-          <div class="col-12 col-md-6">
-            <q-input
-              outlined
-              v-model="localItem.availability"
-              label="Availability"
-              placeholder="e.g., In stock, 2 weeks lead"
-            />
-          </div>
-          <div class="col-12 col-sm-6 col-md-3">
-            <q-input
-              outlined
-              type="number"
-              v-model.number="localItem.pricePerUnit"
-              label="Price / Unit"
-              :suffix="currencyLabel"
-              min="0"
-            />
-          </div>
-          <div class="col-12 col-sm-6 col-md-3">
-            <q-input
-              outlined
-              type="number"
-              v-model.number="localItem.discountPercent"
-              label="Discount %"
-              suffix="%"
-              min="0"
-              max="100"
-            />
-          </div>
+      <div class="row q-col-gutter-md">
+        <div class="col-12 col-sm-6 col-md-3">
+          <q-input
+            outlined
+            type="number"
+            v-model.number="localItem.quantity"
+            label="Quantity *"
+            :rules="[required]"
+            min="1"
+          />
         </div>
+        <div class="col-12 col-sm-6 col-md-3">
+          <q-input
+            outlined
+            v-model="localItem.unit"
+            label="Unit *"
+            placeholder="e.g., pcs, kg, m"
+            :rules="[required]"
+          />
+        </div>
+        <div class="col-12 col-sm-6 col-md-3">
+          <q-input
+            outlined
+            type="number"
+            v-model.number="localItem.pricePerUnit"
+            label="Price / Unit"
+            :suffix="currencyLabel"
+            min="0"
+          />
+        </div>
+        <div class="col-12 col-sm-6 col-md-3">
+          <q-input
+            outlined
+            type="number"
+            v-model.number="localItem.discountPercent"
+            label="Discount %"
+            suffix="%"
+            min="0"
+            max="100"
+          />
+        </div>
+      </div>
 
-        <div class="row q-col-gutter-md">
-          <div class="col-12 col-md-6">
-            <q-input
-              outlined
-              type="number"
-              v-model.number="localItem.positionSum"
-              label="Position Sum"
-              :suffix="currencyLabel"
-              min="0"
-            />
-          </div>
+      <div class="row q-col-gutter-md">
+        <div class="col-12 col-md-6">
+          <q-input
+            outlined
+            v-model="localItem.availability"
+            label="Availability"
+            placeholder="e.g., In stock, 2 weeks lead"
+          />
+        </div>
+        <div class="col-12 col-md-6">
+          <q-input
+            outlined
+            type="number"
+            v-model.number="localItem.positionSum"
+            label="Position Sum"
+            :suffix="currencyLabel"
+            min="0"
+          />
         </div>
       </div>
     </q-card-section>
@@ -178,5 +172,9 @@ const handleRemove = () => {
 .rfq-item-row {
   background-color: var(--q-color-grey-1, #f5f5f5);
   padding: 16px;
+}
+
+.rfq-item-row :deep(.q-input) {
+  width: 100%;
 }
 </style>
