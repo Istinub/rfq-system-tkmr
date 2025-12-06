@@ -1,0 +1,61 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+model RFQ {
+  id           String       @id @default(cuid())
+  company      String
+  contactName  String
+  contactEmail String
+  contactPhone String?
+  createdAt    DateTime     @default(now())
+
+  items        RFQItem[]
+  attachments  Attachment[]
+  secureLinks  SecureLink[]
+}
+
+model RFQItem {
+  id      String @id @default(cuid())
+  rfqId   String
+  name    String
+  quantity Int
+  details String?
+
+  rfq RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+}
+
+model Attachment {
+  id       String @id @default(cuid())
+  rfqId    String
+  fileName String
+  fileUrl  String
+  fileSize Int?
+
+  rfq RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+}
+
+model SecureLink {
+  id           String   @id @default(cuid())
+  token        String   @unique
+  rfqId        String
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+  firstAccessAt DateTime?
+  oneTime      Boolean  @default(false)
+  accessCount  Int      @default(0)
+  lastAccessIP String?
+
+  rfq RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+}

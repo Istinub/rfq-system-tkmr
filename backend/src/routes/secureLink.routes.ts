@@ -1,11 +1,14 @@
 import { Router } from 'express';
-import { SecureLinkSchema, validate } from '@rfq-system/shared';
-import * as secureLinkController from '../controllers/secureLink.controller';
+import {
+  generateSecureLink,
+  invalidateSecureLink,
+  resolveSecureLinkByToken,
+} from '../controllers/secureLink.controller';
 
 const router = Router();
 
-const secureLinkParamsSchema = SecureLinkSchema.pick({ token: true });
-
-router.get('/:token', validate(secureLinkParamsSchema, 'params'), secureLinkController.getByToken);
+router.get('/:token', resolveSecureLinkByToken);
+router.post('/:rfqId', generateSecureLink);
+router.post('/invalidate/:token', invalidateSecureLink);
 
 export default router;

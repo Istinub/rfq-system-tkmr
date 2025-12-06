@@ -1,27 +1,72 @@
 import { generateToken } from '../utils/generateToken';
-import type { SecureLink, SecureLinkAccessLog, SecureLinkValidationResult } from '@rfq-system/shared';
+import type { SecureLink, SecureLinkValidationResult } from '@rfq-system/shared';
+import { getRedisClient } from './redisClient';
 
 const LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const secureLinkStore = new Map<string, SecureLink>();
+const REDIS_HASH_KEY = 'secure-links';
+
+const cacheLink = async (link: SecureLink) => {
+  const client = await getRedisClient();
+  if (!client) {
+    return;
+  }
+
+  try {
+    await client.hSet(REDIS_HASH_KEY, link.token, JSON.stringify(link));
+  } catch (error) {
+    console.error('Failed to cache secure link in Redis:', error);
+  }
+};
+
+const getCachedLink = async (token: string): Promise<SecureLink | null> => {
+  const client = await getRedisClient();
+  if (!client) {
+    return null;
+  }
+
+  try {
+    const payload = await client.hGet(REDIS_HASH_KEY, token);
+    if (!payload) {
+      return null;
+    }
+    return JSON.parse(payload) as SecureLink;
+  } catch (error) {
+    console.error('Failed to read secure link from Redis:', error);
+    return null;
+  }
+};
+
+const removeCachedLink = async (token: string) => {
+  const client = await getRedisClient();
+  if (!client) {
+    return;
+  }
+
+  try {
+    await client.hDel(REDIS_HASH_KEY, token);
+  } catch (error) {
+    console.error('Failed to remove secure link from Redis:', error);
+  }
+};
+
+const clearCache = async () => {
+  const client = await getRedisClient();
+  if (!client) {
+    return;
+  }
+
+  try {
+    await client.del(REDIS_HASH_KEY);
+  } catch (error) {
+    console.error('Failed to clear secure link cache in Redis:', error);
+  }
+};
 
 const nowIso = (): string => new Date().toISOString();
 
 const createExpiry = (ttlMs: number): string => new Date(Date.now() + ttlMs).toISOString();
-
-const buildAccessLog = (ip?: string, userAgent?: string): SecureLinkAccessLog => {
-  const entry: SecureLinkAccessLog = { time: nowIso() };
-
-  if (ip) {
-    entry.ip = ip;
-  }
-
-  if (userAgent) {
-    entry.userAgent = userAgent;
-  }
-
-  return entry;
-};
 
 interface CreateOptions {
   oneTime?: boolean;
@@ -38,49 +83,74 @@ export const SecureLinkService = {
       token,
       rfqId: typeof rfqId === 'string' ? rfqId : String(rfqId),
       createdAt,
-      expires: createExpiry(ttlMs),
+      expiresAt: createExpiry(ttlMs),
       oneTime,
       firstAccessAt: null,
+      lastAccessIP: null,
       accessCount: 0,
-      accessLogs: [],
     };
 
     secureLinkStore.set(token, record);
+    void cacheLink(record);
     return record;
   },
 
-  validateAndAccess(token: string, ip?: string, userAgent?: string): SecureLinkValidationResult {
-    const record = secureLinkStore.get(token);
+  async validateAndAccess(token: string, ip?: string, _userAgent?: string): Promise<SecureLinkValidationResult> {
+    let record = secureLinkStore.get(token);
+
+    if (!record) {
+      const cached = await getCachedLink(token);
+      if (cached) {
+        secureLinkStore.set(token, cached);
+        record = cached;
+      }
+    }
 
     if (!record) {
       return { status: 'not_found' };
     }
 
-    if (Date.parse(record.expires) <= Date.now()) {
+    if (Date.parse(record.expiresAt) <= Date.now()) {
+      secureLinkStore.delete(token);
+      void removeCachedLink(token);
       return { status: 'expired', link: record };
     }
 
     if (record.oneTime && record.accessCount >= 1) {
+      secureLinkStore.delete(token);
+      void removeCachedLink(token);
       return { status: 'consumed', link: record };
     }
 
-    const accessEntry = buildAccessLog(ip, userAgent);
-    record.accessLogs.push(accessEntry);
-
     if (record.firstAccessAt === null) {
-      record.firstAccessAt = accessEntry.time;
+      record.firstAccessAt = nowIso();
     }
 
+    record.lastAccessIP = ip ?? record.lastAccessIP;
     record.accessCount += 1;
+    secureLinkStore.set(token, record);
+    void cacheLink(record);
 
     return { status: 'ok', link: record, rfqId: String(record.rfqId) };
   },
 
-  get(token: string): SecureLink | undefined {
-    return secureLinkStore.get(token);
+  async get(token: string): Promise<SecureLink | undefined> {
+    const record = secureLinkStore.get(token);
+    if (record) {
+      return record;
+    }
+
+    const cached = await getCachedLink(token);
+    if (cached) {
+      secureLinkStore.set(token, cached);
+      return cached;
+    }
+
+    return undefined;
   },
 
   reset(): void {
     secureLinkStore.clear();
+    void clearCache();
   },
 };

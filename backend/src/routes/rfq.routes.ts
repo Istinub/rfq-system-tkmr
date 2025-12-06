@@ -1,13 +1,16 @@
 import { Router } from 'express';
-import { validate, RFQSchema, SecureLinkSchema } from '@rfq-system/shared';
-import { createRFQ, generateSecureLink, getRFQByToken } from '../controllers/rfq.controller';
+import { createRFQ, deleteRFQ, getRFQ, listRFQs } from '../controllers/rfq.controller';
 
 const router = Router();
 
-const secureLinkRequestSchema = SecureLinkSchema.pick({ oneTime: true });
+router
+  .route('/')
+  .post(createRFQ)
+  .get(listRFQs);
 
-router.post('/', validate(RFQSchema), createRFQ);
-router.get('/by-token/:token', getRFQByToken);
-router.post('/:id/secure-link', validate(secureLinkRequestSchema), generateSecureLink);
+router
+  .route('/:id')
+  .get(getRFQ)
+  .delete(deleteRFQ);
 
 export default router;

@@ -1,6 +1,6 @@
 import axios, { type AxiosError } from 'axios';
 import { z } from 'zod';
-import { RFQSchema, type RFQ } from '@rfq-system/shared';
+import { RFQSchema, type RFQRequest } from '@rfq-system/shared';
 
 export interface HealthResponse {
   status: string;
@@ -19,8 +19,15 @@ export class ApiError extends Error {
   }
 }
 
+const resolvedBackendOrigin = (import.meta.env.VITE_BACKEND_ORIGIN ?? '').trim();
+const backendOrigin = resolvedBackendOrigin || 'https://rfq-system-tkmr-backend.onrender.com';
+
+const apiBaseUrl = import.meta.env.PROD
+  ? 'https://rfq-tkmr.netlify.app/api'
+  : '/api';
+
 const apiClient = axios.create({
-  baseURL: '/api',
+  baseURL: apiBaseUrl,
   timeout: 15000,
 });
 
@@ -28,31 +35,25 @@ apiClient.defaults.headers.common['Content-Type'] = 'application/json';
 apiClient.defaults.headers.common.Accept = 'application/json';
 
 const CreateRFQResponseSchema = z.object({
-  id: z.string().min(1, 'Missing RFQ identifier'),
-  secureLinkToken: z.string().min(1).optional(),
+  data: RFQSchema.pick({ id: true }),
 });
 
-export type CreateRFQResponse = z.infer<typeof CreateRFQResponseSchema>;
+export type CreateRFQResponse = z.infer<typeof CreateRFQResponseSchema>['data'];
 
 const SecureLinkMetadataSchema = z.object({
   token: z.string().min(1),
+  rfqId: z.union([z.string().min(1), z.number().int().nonnegative()]),
   createdAt: z.string().min(1),
-  expires: z.string().min(1),
+  expiresAt: z.string().min(1),
+  firstAccessAt: z.string().nullable(),
+  lastAccessIP: z.string().nullable(),
   oneTime: z.boolean(),
-  firstAccessAt: z.string().min(1).nullable(),
   accessCount: z.number().int().nonnegative(),
-  accessLogs: z.array(
-    z.object({
-      time: z.string().min(1),
-      ip: z.string().optional(),
-      userAgent: z.string().optional(),
-    })
-  ),
 });
 
 const SecureLinkDetailsResponseSchema = z.object({
   rfq: RFQSchema,
-  link: SecureLinkMetadataSchema,
+  secureLink: SecureLinkMetadataSchema,
 });
 
 export type SecureLinkMetadata = z.infer<typeof SecureLinkMetadataSchema>;
@@ -106,11 +107,32 @@ apiClient.interceptors.response.use(
 );
 
 export const healthCheck = async (): Promise<HealthResponse> => {
-  const { data } = await apiClient.get<HealthResponse>('/health');
-  return data;
+  const normalizedOrigin = backendOrigin.replace(/\/$/, '');
+  const healthUrl = normalizedOrigin ? `${normalizedOrigin}/health` : '/health';
+
+  try {
+    const { data } = await axios.get<HealthResponse>(healthUrl, {
+      timeout: 15000,
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+    return data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const message = extractErrorMessage(error);
+      throw new ApiError(message, error.response?.status, error.response?.data);
+    }
+
+    if (error instanceof Error) {
+      throw new ApiError(error.message);
+    }
+
+    throw new ApiError('Unable to reach health endpoint');
+  }
 };
 
-export const createRFQ = async (rfq: RFQ): Promise<CreateRFQResponse> => {
+export const createRFQ = async (rfq: RFQRequest): Promise<CreateRFQResponse> => {
   const { data } = await apiClient.post('/rfq', rfq);
   const parsed = CreateRFQResponseSchema.safeParse(data);
 
@@ -118,7 +140,7 @@ export const createRFQ = async (rfq: RFQ): Promise<CreateRFQResponse> => {
     throw new ApiError('Invalid RFQ response payload', 500, parsed.error.flatten());
   }
 
-  return parsed.data;
+  return parsed.data.data;
 };
 
 export const getSecureLinkDetails = async (token: string): Promise<SecureLinkDetailsResponse> => {

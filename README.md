@@ -58,6 +58,12 @@ rfq-system-tkmr/
 
 ## 🚀 Getting Started
 
+## 🌐 Live Deployment
+
+- **Frontend (Netlify)**: https://rfq-tkmr.netlify.app/
+- **Build settings**: base `frontend/`, publish `dist/spa/`, command `quasar build`, Node.js `20`
+- Deploy previews and production builds are handled by Netlify using the `netlify.toml` configuration in this repository.
+
 ### Prerequisites
 
 - Node.js >= 18.0.0

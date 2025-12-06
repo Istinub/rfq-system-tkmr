@@ -9,21 +9,15 @@ const hexToken = z
   .length(64, 'Token must be 64 characters')
   .regex(/^[0-9a-f]+$/i, 'Token must be hexadecimal');
 
-const accessLogSchema = z.object({
-  time: isoDateString,
-  ip: z.string().optional(),
-  userAgent: z.string().optional(),
-});
-
 export const SecureLinkSchema = z.object({
   token: hexToken,
   rfqId: z.union([z.string().min(1, 'RFQ ID is required'), z.number().int().nonnegative()]),
   createdAt: isoDateString,
-  expires: isoDateString,
+  expiresAt: isoDateString,
   oneTime: z.boolean().default(false),
   firstAccessAt: isoDateString.nullable().default(null),
+  lastAccessIP: z.string().min(1).nullable().default(null),
   accessCount: z.number().int().nonnegative().default(0),
-  accessLogs: z.array(accessLogSchema).default([]),
 });
 
 export type SecureLink = z.infer<typeof SecureLinkSchema>;

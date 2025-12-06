@@ -1,11 +1,11 @@
-import type { RFQ, SecureLink } from '@rfq-system/shared';
+import type { RFQ, RFQRequest, SecureLink } from '@rfq-system/shared';
 import { SecureLinkService } from './secureLink.service';
 
 export type RFQStatus = 'pending' | 'submitted' | 'processing' | 'completed' | 'cancelled';
 
 export interface SecureLinkDetails {
   token: string;
-  expires: number;
+  expiresAt: number;
 }
 
 export interface RFQRecord {
@@ -27,11 +27,39 @@ const tokenIndex = new Map<string, RFQRecord>();
 
 let sequence = 1;
 
-const createRecord = (rfq: RFQ): RFQRecord => {
+const createRecord = (payload: RFQRequest): RFQRecord => {
+  const id = String(sequence++);
+  const timestamp = new Date().toISOString();
+
+  const rfq: RFQ = {
+    id,
+    company: payload.company,
+    contactName: payload.contactName,
+    contactEmail: payload.contactEmail,
+    contactPhone: payload.contactPhone ?? null,
+    createdAt: timestamp,
+    items: payload.items.map((item, index) => ({
+      id: `${id}-item-${index + 1}`,
+      name: item.name,
+      quantity: item.quantity,
+      details: item.details ?? null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    })),
+    attachments: (payload.attachments ?? []).map((attachment, index) => ({
+      id: `${id}-attachment-${index + 1}`,
+      fileName: attachment.fileName,
+      fileUrl: attachment.fileUrl,
+      fileSize: attachment.fileSize ?? null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    })),
+  };
+
   const record: RFQRecord = {
-    id: String(sequence++),
+    id,
     rfq,
-    createdAt: new Date().toISOString(),
+    createdAt: timestamp,
     status: 'pending',
   };
 
@@ -44,7 +72,7 @@ export const RFQService = {
     return Array.from(rfqStore.values());
   },
 
-  create(rfq: RFQ): RFQRecord {
+  create(rfq: RFQRequest): RFQRecord {
     return createRecord(rfq);
   },
 
@@ -67,11 +95,11 @@ export const RFQService = {
       ttlMs,
       oneTime: options?.oneTime ?? false,
     });
-    const expires = new Date(secureLink.expires).getTime();
+    const expiresAt = new Date(secureLink.expiresAt).getTime();
 
     record.secureLink = {
       token: secureLink.token,
-      expires,
+      expiresAt,
     };
 
     tokenIndex.set(secureLink.token, record);
@@ -80,12 +108,12 @@ export const RFQService = {
       id: record.id,
       rfq: record.rfq,
       token: secureLink.token,
-      expires,
+      expiresAt,
       metadata: secureLink,
     };
   },
 
-  findByToken(token: string): SecureLinkRecord | undefined {
+  async findByToken(token: string): Promise<SecureLinkRecord | undefined> {
     const record = tokenIndex.get(token);
 
     if (!record || !record.secureLink || record.secureLink.token !== token) {
@@ -96,7 +124,7 @@ export const RFQService = {
       id: record.id,
       rfq: record.rfq,
       ...record.secureLink,
-      metadata: SecureLinkService.get(record.secureLink.token),
+      metadata: await SecureLinkService.get(record.secureLink.token),
     };
   },
 

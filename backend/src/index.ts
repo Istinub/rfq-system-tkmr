@@ -1,9 +1,12 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors, { type CorsOptions } from 'cors';
 import dotenv from 'dotenv';
-import { healthRouter } from './routes/health';
+import healthRouter from './routes/health.routes';
 import secureLinkRouter from './routes/secureLink.routes';
 import rfqRouter from './routes/rfq.routes';
+import { rfqByTokenRouter } from './routes/rfq.byToken.routes';
+import { errorHandler } from './middleware/errorHandler';
+import { requestLogger } from './middleware/requestLogger';
 
 // Load environment variables
 dotenv.config();
@@ -22,11 +25,15 @@ const corsOptions: CorsOptions = resolvedCorsOrigins.length > 0 ? { origin: reso
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+if (process.env.NODE_ENV !== 'test') {
+  app.use(requestLogger);
+}
 
 // Routes
 app.use('/health', healthRouter);
-app.use('/api/secure', secureLinkRouter);
+app.use('/api/rfq/by-token', rfqByTokenRouter);
 app.use('/api/rfq', rfqRouter);
+app.use('/api/secure-link', secureLinkRouter);
 
 // Root endpoint
 app.get('/', (req: Request, res: Response) => {
@@ -50,13 +57,7 @@ app.use((req: Request, res: Response) => {
 });
 
 // Error handler
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error('Error:', err);
-  res.status(500).json({
-    error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
-  });
-});
+app.use(errorHandler);
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
@@ -67,7 +68,7 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`   Environment : ${envName}`);
     console.log(`   Listening   : 0.0.0.0:${PORT}`);
     console.log(`   Health      : /health`);
-    console.log(`   Secure API  : /api/secure`);
+    console.log(`   Secure API  : /api/secure-link`);
     console.log(`   CORS origin : ${originsLog}`);
   });
 }

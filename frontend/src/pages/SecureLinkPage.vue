@@ -32,11 +32,11 @@
                   <q-item>
                     <q-item-section>
                       <q-item-label caption>Contact</q-item-label>
-                      <q-item-label>{{ rfq.contact.name }}</q-item-label>
+                      <q-item-label>{{ rfq.contactName }}</q-item-label>
                     </q-item-section>
                     <q-item-section side>
-                      <q-item-label>{{ rfq.contact.email }}</q-item-label>
-                      <q-item-label caption v-if="rfq.contact.phone">{{ rfq.contact.phone }}</q-item-label>
+                      <q-item-label>{{ rfq.contactEmail }}</q-item-label>
+                      <q-item-label caption v-if="rfq.contactPhone">{{ rfq.contactPhone }}</q-item-label>
                     </q-item-section>
                   </q-item>
                 </q-list>
@@ -45,98 +45,87 @@
               <section>
                 <div class="text-h6 text-weight-bold q-mb-sm">Items</div>
                 <q-list bordered separator>
-                  <q-item v-for="(item, index) in rfq.items" :key="index">
+                  <q-item v-for="(item, index) in rfq.items" :key="item.id || index">
                     <q-item-section>
-                      <q-item-label class="text-weight-bold">#{{ index + 1 }} · {{ item.description }}</q-item-label>
-                      <q-item-label caption>
-                        Quantity: {{ item.quantity }}<span v-if="item.unit"> {{ item.unit }}</span>
-                      </q-item-label>
-                      <q-item-label caption v-if="item.unitPrice">
-                        Unit price: {{ formatCurrency(item.unitPrice) }}
-                      </q-item-label>
+                      <q-item-label class="text-weight-bold">#{{ index + 1 }} · {{ item.name }}</q-item-label>
+                      <q-item-label caption>Quantity: {{ item.quantity }}</q-item-label>
+                      <q-item-label caption v-if="item.details">Details: {{ item.details }}</q-item-label>
                     </q-item-section>
                   </q-item>
                 </q-list>
-              </section>
-
-              <section v-if="rfq.notes">
-                <div class="text-h6 text-weight-bold q-mb-sm">Notes</div>
-                <q-markup-table dense flat bordered>
-                  <tbody>
-                    <tr>
-                      <td>{{ rfq.notes }}</td>
-                    </tr>
-                  </tbody>
-                </q-markup-table>
               </section>
 
               <section v-if="rfq.attachments?.length">
                 <div class="text-h6 text-weight-bold q-mb-sm">Attachments</div>
                 <q-list bordered>
-                  <q-item v-for="(attachment, index) in rfq.attachments" :key="index">
+                  <q-item v-for="(attachment, index) in rfq.attachments" :key="attachment.id || index">
                     <q-item-section>
                       <q-item-label>Attachment #{{ index + 1 }}</q-item-label>
-                      <q-item-label caption>{{ attachment.slice(0, 32) }}...</q-item-label>
+                      <q-item-label caption>{{ attachment.fileName }}</q-item-label>
+                      <q-item-label caption>
+                        <a
+                          :href="attachment.fileUrl"
+                          target="_blank"
+                          rel="noopener"
+                          class="text-primary"
+                        >
+                          {{ attachment.fileUrl }}
+                        </a>
+                      </q-item-label>
+                      <q-item-label caption v-if="attachment.fileSize !== null && attachment.fileSize !== undefined">
+                        Size: {{ formatFileSize(attachment.fileSize) }}
+                      </q-item-label>
                     </q-item-section>
                   </q-item>
                 </q-list>
               </section>
 
-              <section v-if="link">
+              <section v-if="secureLink">
                 <div class="text-h6 text-weight-bold q-mb-sm">Secure Link Details</div>
                 <q-list bordered>
                   <q-item>
                     <q-item-section>
+                      <q-item-label caption>Token</q-item-label>
+                      <q-item-label>{{ secureLink.token }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item>
+                    <q-item-section>
                       <q-item-label caption>Created</q-item-label>
-                      <q-item-label>{{ formatDateTime(link.createdAt) }}</q-item-label>
+                      <q-item-label>{{ formatDateTime(secureLink.createdAt) }}</q-item-label>
                     </q-item-section>
                   </q-item>
                   <q-item>
                     <q-item-section>
                       <q-item-label caption>Expires</q-item-label>
-                      <q-item-label>{{ formatDateTime(link.expires) }}</q-item-label>
+                      <q-item-label>{{ formatDateTime(secureLink.expiresAt) }}</q-item-label>
                     </q-item-section>
                   </q-item>
                   <q-item>
                     <q-item-section>
                       <q-item-label caption>One-Time Access</q-item-label>
-                      <q-item-label>{{ formatBoolean(link.oneTime) }}</q-item-label>
-                    </q-item-section>
-                  </q-item>
-                  <q-item>
-                    <q-item-section>
-                      <q-item-label caption>First Access</q-item-label>
-                      <q-item-label>{{ formatDateTime(link.firstAccessAt) }}</q-item-label>
+                      <q-item-label>{{ secureLink.oneTime ? 'Yes' : 'No' }}</q-item-label>
                     </q-item-section>
                   </q-item>
                   <q-item>
                     <q-item-section>
                       <q-item-label caption>Access Count</q-item-label>
-                      <q-item-label>{{ link.accessCount }}</q-item-label>
+                      <q-item-label>{{ secureLink.accessCount }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item>
+                    <q-item-section>
+                      <q-item-label caption>First Access</q-item-label>
+                      <q-item-label>{{ formatDateTime(secureLink.firstAccessAt) }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item>
+                    <q-item-section>
+                      <q-item-label caption>Last Access IP</q-item-label>
+                      <q-item-label>{{ secureLink.lastAccessIP ?? '—' }}</q-item-label>
                     </q-item-section>
                   </q-item>
                 </q-list>
-
-                <div class="q-mt-lg">
-                  <div class="text-subtitle1 text-weight-bold q-mb-sm">Access Logs</div>
-                  <div v-if="!hasAccessLogs" class="text-body2 text-grey-7">No access requests recorded yet.</div>
-                  <q-markup-table v-else flat bordered>
-                    <thead>
-                      <tr>
-                        <th class="text-left">Time</th>
-                        <th class="text-left">IP Address</th>
-                        <th class="text-left">User Agent</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="(entry, index) in accessLogs" :key="index">
-                        <td>{{ formatDateTime(entry.time) }}</td>
-                        <td>{{ entry.ip ?? '—' }}</td>
-                        <td>{{ entry.userAgent ?? '—' }}</td>
-                      </tr>
-                    </tbody>
-                  </q-markup-table>
-                </div>
               </section>
             </div>
           </q-card-section>
@@ -162,7 +151,7 @@ import type { RFQ } from '@rfq-system/shared';
 
 const route = useRoute();
 const rfq = ref<RFQ | null>(null);
-const link = ref<SecureLinkDetailsResponse['link'] | null>(null);
+const secureLink = ref<SecureLinkDetailsResponse['secureLink'] | null>(null);
 const isLoading = ref(false);
 const errorMessage = ref<string | null>(null);
 
@@ -171,9 +160,7 @@ const token = computed(() => {
   return typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : null;
 });
 
-const tokenDisplay = computed(() => link.value?.token ?? token.value ?? 'N/A');
-const accessLogs = computed(() => link.value?.accessLogs ?? []);
-const hasAccessLogs = computed(() => accessLogs.value.length > 0);
+const tokenDisplay = computed(() => secureLink.value?.token ?? token.value ?? 'N/A');
 
 const fetchSecureLink = async (secureToken: string) => {
   isLoading.value = true;
@@ -182,22 +169,14 @@ const fetchSecureLink = async (secureToken: string) => {
   try {
     const result = await getSecureLinkDetails(secureToken);
     rfq.value = result.rfq;
-    link.value = result.link;
+    secureLink.value = result.secureLink;
   } catch (error) {
     rfq.value = null;
-    link.value = null;
+    secureLink.value = null;
     errorMessage.value = error instanceof Error ? error.message : 'Unable to load secure link details';
   } finally {
     isLoading.value = false;
   }
-};
-
-const formatCurrency = (value: number): string => {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-  }).format(value);
 };
 
 const formatDateTime = (value: string | null | undefined): string => {
@@ -215,7 +194,26 @@ const formatDateTime = (value: string | null | undefined): string => {
   }
 };
 
-const formatBoolean = (value: boolean): string => (value ? 'Yes' : 'No');
+const formatFileSize = (value: number | null | undefined): string => {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return '—';
+  }
+
+  if (value < 1024) {
+    return `${value} B`;
+  }
+
+  const units = ['KB', 'MB', 'GB'];
+  let size = value / 1024;
+  let unitIndex = 0;
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${size.toFixed(1)} ${units[unitIndex]}`;
+};
 
 onMounted(() => {
   if (token.value) {

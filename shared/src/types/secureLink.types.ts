@@ -2,7 +2,6 @@ import type { z } from 'zod';
 import { SecureLinkSchema } from '../schemas/secureLink.schema';
 
 export type SecureLink = z.infer<typeof SecureLinkSchema>;
-export type SecureLinkAccessLog = SecureLink['accessLogs'][number];
 
 export type SecureLinkValidationResult =
   | { status: 'not_found' }

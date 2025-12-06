@@ -10,10 +10,10 @@
           <div id="general-info" class="section-anchor">
             <q-card class="section-card rfq-section">
               <q-card-section>
-                <SectionTitle label="General Information" />
+                <SectionTitle label="Contact Information" />
                 <div class="section-subheading">
-                  <div class="text-subtitle2 text-weight-bold">Contact Details</div>
-                  <div class="helper-text">Tell us who we should coordinate with for this request.</div>
+                  <div class="text-subtitle2 text-weight-bold">Who should we reach out to?</div>
+                  <div class="helper-text">Provide the primary contact for this RFQ.</div>
                 </div>
                 <div class="row q-col-gutter-md q-mb-md">
                   <div class="col-12 col-md-6">
@@ -27,75 +27,6 @@
                   </div>
                   <div class="col-12 col-md-6">
                     <q-input outlined v-model="form.phone" label="Phone" :rules="[phoneInputRule]" hint="Optional" />
-                  </div>
-                  <div class="col-12 col-md-6">
-                    <q-input outlined v-model="form.location" label="Location" />
-                  </div>
-                  <div class="col-12 col-md-6">
-                    <q-input outlined v-model="form.billingAddress" label="Billing Address" type="textarea" autogrow />
-                  </div>
-                </div>
-              </q-card-section>
-            </q-card>
-          </div>
-
-          <div id="requested-terms" class="section-anchor">
-            <q-card class="section-card rfq-section">
-              <q-card-section>
-                <SectionTitle label="Requested Terms" />
-                <div class="helper-text q-mb-md">Share the original inquiry numbers and target expectations.</div>
-                <div class="row q-col-gutter-md">
-                  <div class="col-12 col-md-4">
-                    <q-input outlined v-model="form.inquiryDate" type="date" label="Inquiry Date" />
-                  </div>
-                  <div class="col-12 col-md-4">
-                    <q-input outlined v-model="form.inquiryNumber" label="Inquiry Number" />
-                  </div>
-                  <div class="col-12 col-md-4">
-                    <q-input outlined v-model="form.replyByDate" type="date" label="Reply By" />
-                  </div>
-                  <div class="col-12 col-md-4">
-                    <q-input outlined v-model="form.requestedPaymentTerms" label="Requested Payment Terms" />
-                  </div>
-                  <div class="col-12 col-md-4">
-                    <q-input outlined v-model="form.requestedCurrency" label="Requested Currency" />
-                  </div>
-                  <div class="col-12 col-md-4">
-                    <q-input outlined v-model="form.requestedQualityLevel" label="Requested Quality Level" />
-                  </div>
-                </div>
-              </q-card-section>
-            </q-card>
-          </div>
-
-          <div id="offer-delivery" class="section-anchor">
-            <q-card class="section-card rfq-section">
-              <q-card-section>
-                <SectionTitle label="Offer &amp; Delivery Terms" />
-                <div class="row q-col-gutter-md">
-                  <div class="col-12 col-md-6">
-                    <q-input outlined v-model="form.referenceNumber" label="Reference Number" />
-                  </div>
-                  <div class="col-12 col-md-6">
-                    <q-input outlined v-model="form.offerValidUntil" type="date" label="Offer Valid Until" />
-                  </div>
-                  <div class="col-12 col-md-6">
-                    <q-input outlined v-model="form.offeredPaymentTerms" label="Offered Payment Terms" />
-                  </div>
-                  <div class="col-12 col-md-6">
-                    <q-input outlined v-model="form.offeredCurrency" label="Offered Currency" />
-                  </div>
-                  <div class="col-12 col-md-6">
-                    <q-input outlined v-model="form.offeredQualityLevel" label="Offered Quality Level" />
-                  </div>
-                  <div class="col-12 col-md-6">
-                    <q-input outlined v-model="form.deliveryDaysFromApproval" type="number" min="0" label="Delivery Days (from approval)" />
-                  </div>
-                  <div class="col-12 col-md-6">
-                    <q-input outlined v-model="form.offeredDeliveryTerms" label="Offered Delivery Terms" />
-                  </div>
-                  <div class="col-12 col-md-6">
-                    <q-input outlined v-model="form.offeredItemsLocation" label="Items Location" />
                   </div>
                 </div>
               </q-card-section>
@@ -125,6 +56,7 @@
             <q-card class="section-card rfq-section">
               <q-card-section>
                 <SectionTitle label="Requested Items" />
+                <div class="helper-text q-mb-md">List the products or services needed. At least one item is required.</div>
                 <div class="column q-gutter-md">
                   <RFQItemRow
                     v-for="(item, index) in form.items"
@@ -132,7 +64,6 @@
                     :item="item"
                     :index="index"
                     :removable="form.items.length > 1"
-                    :currency-label="currencyLabel"
                     @update:item="updateItem(index, $event)"
                     @remove="removeItem"
                   />
@@ -146,59 +77,6 @@
                     label="Add item"
                     @click="addItem"
                   />
-                </div>
-              </q-card-section>
-            </q-card>
-          </div>
-
-          <div id="additional-items" class="section-anchor">
-            <q-card class="section-card rfq-section">
-              <q-card-section>
-                <SectionTitle label="Additional Items" />
-                <div class="helper-text q-mb-md">Capture ancillary costs, discounts, or notes that influence the offer.</div>
-                <div class="row q-col-gutter-md">
-                  <div class="col-12 col-md-6">
-                    <q-input outlined type="textarea" autogrow v-model="form.additionalItemTitle" label="Headline" placeholder="e.g., Packaging &amp; Handling" />
-                  </div>
-                  <div class="col-12 col-md-6">
-                    <q-input outlined type="textarea" autogrow v-model="form.additionalItemDescription" label="Details" placeholder="Provide calculation or rationale" />
-                  </div>
-                </div>
-              </q-card-section>
-            </q-card>
-          </div>
-
-          <div id="remarks" class="section-anchor">
-            <q-card class="section-card rfq-section">
-              <q-card-section>
-                <SectionTitle label="Remarks" />
-                <div class="row q-col-gutter-md">
-                  <div class="col-12 col-md-6">
-                    <q-input outlined type="textarea" autogrow v-model="form.requisitionRemark" label="Requisition Remark" placeholder="Anything the buyer should confirm internally" />
-                  </div>
-                  <div class="col-12 col-md-6">
-                    <q-input outlined type="textarea" autogrow v-model="form.supplierRemark" label="Supplier Remark" placeholder="Commitments, exclusions, or extra clarifications" />
-                  </div>
-                </div>
-              </q-card-section>
-            </q-card>
-          </div>
-
-          <div id="finish-offer" class="section-anchor">
-            <q-card class="section-card rfq-section">
-              <q-card-section>
-                <SectionTitle label="Finish Offer" />
-                <div class="row q-col-gutter-md">
-                  <div class="col-12 col-sm-6">
-                    <q-input
-                      outlined
-                      type="number"
-                      min="0"
-                      v-model.number="form.totalSum"
-                      label="Offer Total"
-                      :suffix="currencyLabel"
-                    />
-                  </div>
                 </div>
               </q-card-section>
             </q-card>
@@ -226,7 +104,7 @@ import FileUpload from '../components/FileUpload.vue';
 import OfferNavigation from '../components/OfferNavigation.vue';
 import { emailRule, required } from '../validation/rules';
 import { createRFQ } from '../services/api';
-import type { RFQ } from '@rfq-system/shared';
+import type { RFQRequest } from '@rfq-system/shared';
 
 const phoneInputRule = (value: string | null | undefined): true | string => {
   if (!value || value.trim().length === 0) {
@@ -238,13 +116,9 @@ const phoneInputRule = (value: string | null | undefined): true | string => {
 
 type FormItem = {
   id: string;
-  description: string;
-  quantity: number;
-  unit: string;
-  availability: string;
-  pricePerUnit: number | null;
-  discountPercent: number | null;
-  positionSum: number | null;
+  name: string;
+  quantity: number | null;
+  details: string;
 };
 
 type SectionChild = {
@@ -262,60 +136,17 @@ type FormState = {
   contactPerson: string;
   email: string;
   phone: string;
-  location: string;
-  billingAddress: string;
-  inquiryDate: string;
-  inquiryNumber: string;
-  replyByDate: string;
-  requestedPaymentTerms: string;
-  requestedCurrency: string;
-  requestedQualityLevel: string;
-  referenceNumber: string;
-  offerValidUntil: string;
-  offeredPaymentTerms: string;
-  offeredCurrency: string;
-  offeredQualityLevel: string;
-  deliveryDaysFromApproval: string;
-  offeredDeliveryTerms: string;
-  offeredItemsLocation: string;
   items: FormItem[];
   attachments: File[];
-  additionalItemTitle: string;
-  additionalItemDescription: string;
-  requisitionRemark: string;
-  supplierRemark: string;
-  totalSum: number | null;
 };
 
 const baseSections: SectionInfo[] = [
   {
     id: 'general-info',
-    label: 'General Information',
-    children: [
-      { label: 'Contact Details' },
-      { label: 'Location' },
-    ],
+    label: 'Contact Information',
   },
-  {
-    id: 'requested-terms',
-    label: 'Requested Terms',
-    children: [
-      { label: 'Inquiry Date' },
-      { label: 'Requested Payment Terms' },
-    ],
-  },
-  {
-    id: 'offer-delivery',
-    label: 'Offer & Delivery Terms',
-    children: [
-      { label: 'Offered Currency' },
-      { label: 'Delivery Days' },
-    ],
-  },
+  { id: 'documents', label: 'Documents' },
   { id: 'requested-items', label: 'Requested Items' },
-  { id: 'additional-items', label: 'Additional Items' },
-  { id: 'remarks', label: 'Remarks' },
-  { id: 'finish-offer', label: 'Finish Offer' },
 ];
 
 const $q = useQuasar();
@@ -325,13 +156,9 @@ const activeSection = ref(baseSections[0].id);
 
 const createBlankItem = (): FormItem => ({
   id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-  description: '',
+  name: '',
   quantity: 1,
-  unit: '',
-  availability: '',
-  pricePerUnit: null,
-  discountPercent: null,
-  positionSum: null,
+  details: '',
 });
 
 const form = reactive<FormState>({
@@ -339,32 +166,9 @@ const form = reactive<FormState>({
   contactPerson: '',
   email: '',
   phone: '',
-  location: '',
-  billingAddress: '',
-  inquiryDate: '',
-  inquiryNumber: '',
-  replyByDate: '',
-  requestedPaymentTerms: '',
-  requestedCurrency: '',
-  requestedQualityLevel: '',
-  referenceNumber: '',
-  offerValidUntil: '',
-  offeredPaymentTerms: '',
-  offeredCurrency: '',
-  offeredQualityLevel: '',
-  deliveryDaysFromApproval: '',
-  offeredDeliveryTerms: '',
-  offeredItemsLocation: '',
   items: [createBlankItem()],
   attachments: [],
-  additionalItemTitle: '',
-  additionalItemDescription: '',
-  requisitionRemark: '',
-  supplierRemark: '',
-  totalSum: null,
 });
-
-const currencyLabel = computed(() => form.offeredCurrency || form.requestedCurrency || 'USD');
 
 const attachmentNames = computed(() => form.attachments.map((file) => file.name || 'Attachment'));
 
@@ -392,34 +196,16 @@ const removeItem = (index: number) => {
 };
 
 type ItemUpdatePayload = {
-  description: string;
+  name: string;
   quantity: number | null;
-  unit: string;
-  availability?: string;
-  pricePerUnit?: number | null;
-  discountPercent?: number | null;
-  positionSum?: number | null;
+  details?: string;
 };
 
 const updateItem = (index: number, value: ItemUpdatePayload) => {
   form.items[index] = {
     ...form.items[index],
-    description: value.description,
-    unit: value.unit,
-    availability:
-      typeof value.availability === 'string' ? value.availability : form.items[index].availability,
-    pricePerUnit:
-      typeof value.pricePerUnit === 'number' || value.pricePerUnit === null
-        ? value.pricePerUnit
-        : form.items[index].pricePerUnit,
-    discountPercent:
-      typeof value.discountPercent === 'number' || value.discountPercent === null
-        ? value.discountPercent
-        : form.items[index].discountPercent,
-    positionSum:
-      typeof value.positionSum === 'number' || value.positionSum === null
-        ? value.positionSum
-        : form.items[index].positionSum,
+    name: value.name,
+    details: typeof value.details === 'string' ? value.details : form.items[index].details,
     quantity: typeof value.quantity === 'number' ? value.quantity : form.items[index].quantity,
   };
 };
@@ -435,34 +221,35 @@ const fileToBase64 = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
-const buildPayload = async (): Promise<RFQ> => {
-  const attachments = await Promise.all(form.attachments.map(fileToBase64));
-  const attachmentPayload = attachments.filter((entry) => entry.length > 0);
+const buildPayload = async (): Promise<RFQRequest> => {
+  const attachments = await Promise.all(
+    form.attachments.map(async (file) => ({
+      fileName: file.name,
+      fileUrl: await fileToBase64(file),
+      fileSize: file.size,
+    }))
+  );
+  const attachmentPayload = attachments.filter((entry) => entry.fileUrl.length > 0);
 
-  const remarksSections = [
-    form.additionalItemTitle || form.additionalItemDescription
-      ? `Additional: ${[form.additionalItemTitle, form.additionalItemDescription].filter(Boolean).join('\n')}`
-      : null,
-    form.requisitionRemark ? `Requisition Remark: ${form.requisitionRemark}` : null,
-    form.supplierRemark ? `Supplier Remark: ${form.supplierRemark}` : null,
-  ].filter((entry): entry is string => Boolean(entry));
+  const itemsPayload = form.items
+    .map(({ name, quantity, details }) => ({
+      name: name.trim(),
+      quantity: typeof quantity === 'number' ? quantity : Number(quantity ?? 0),
+      details: details.trim() ? details.trim() : undefined,
+    }))
+    .filter((item) => item.name.length > 0 && Number.isFinite(item.quantity) && item.quantity > 0);
 
-  const notes = remarksSections.join('\n\n').trim();
+  if (itemsPayload.length === 0) {
+    throw new Error('Add at least one requested item before submitting.');
+  }
 
   return {
     company: form.companyName.trim(),
-    contact: {
-      name: form.contactPerson.trim(),
-      email: form.email.trim(),
-      phone: form.phone.trim() || undefined,
-    },
-    items: form.items.map(({ description, quantity, unit }) => ({
-      description: description.trim(),
-      quantity,
-      unit: unit.trim(),
-    })),
+    contactName: form.contactPerson.trim(),
+    contactEmail: form.email.trim(),
+    contactPhone: form.phone.trim() || undefined,
+    items: itemsPayload,
     attachments: attachmentPayload.length ? attachmentPayload : undefined,
-    notes: notes.length ? notes : undefined,
   };
 };
 
@@ -471,27 +258,6 @@ const resetForm = () => {
   form.contactPerson = '';
   form.email = '';
   form.phone = '';
-  form.location = '';
-  form.billingAddress = '';
-  form.inquiryDate = '';
-  form.inquiryNumber = '';
-  form.replyByDate = '';
-  form.requestedPaymentTerms = '';
-  form.requestedCurrency = '';
-  form.requestedQualityLevel = '';
-  form.referenceNumber = '';
-  form.offerValidUntil = '';
-  form.offeredPaymentTerms = '';
-  form.offeredCurrency = '';
-  form.offeredQualityLevel = '';
-  form.deliveryDaysFromApproval = '';
-  form.offeredDeliveryTerms = '';
-  form.offeredItemsLocation = '';
-  form.additionalItemTitle = '';
-  form.additionalItemDescription = '';
-  form.requisitionRemark = '';
-  form.supplierRemark = '';
-  form.totalSum = null;
   form.items.splice(0, form.items.length, createBlankItem());
   form.attachments.splice(0, form.attachments.length);
   formRef.value?.resetValidation?.();
@@ -514,13 +280,11 @@ const handleSubmit = async () => {
 
   try {
     const payload = await buildPayload();
-    const { id, secureLinkToken } = await createRFQ(payload);
+    const { id } = await createRFQ(payload);
 
     $q.notify({
       type: 'positive',
-      message: secureLinkToken
-        ? `RFQ ${id} submitted. Secure token generated.`
-        : `RFQ ${id} submitted successfully.`,
+      message: `RFQ ${id} submitted successfully.`,
       position: 'top',
     });
 
@@ -567,7 +331,7 @@ onMounted(() => {
     });
   }, options);
 
-    baseSections.forEach(({ id }) => {
+  baseSections.forEach(({ id }) => {
     const el = document.getElementById(id);
     if (el) {
       sectionObserver?.observe(el);
