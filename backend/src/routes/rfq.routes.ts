@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createRFQ, deleteRFQ, getRFQ, listRFQs } from '../controllers/rfq.controller';
+import { createRFQ, deleteRFQ, getRFQ, listRFQs } from '../controllers/rfq.controller.js';
 
 const router = Router();
 

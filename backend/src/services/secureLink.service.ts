@@ -1,6 +1,6 @@
-import { generateToken } from '../utils/generateToken';
+import { generateToken } from '../utils/generateToken.js';
 import type { SecureLink, SecureLinkValidationResult } from '@rfq-system/shared';
-import { getRedisClient } from './redisClient';
+import { getRedisClient } from './redisClient.js';
 
 const LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 

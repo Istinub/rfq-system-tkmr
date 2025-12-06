@@ -1,7 +1,7 @@
 import rateLimit from 'express-rate-limit';
 import type { LegacyStore, Store } from 'express-rate-limit';
 import type { Request, Response } from 'express';
-import { getRedisClient } from '../services/redisClient';
+import { getRedisClient } from '../services/redisClient.js';
 
 const limiterHandler = (_req: Request, res: Response, message: string) => {
   res.status(429).json({ message });

@@ -1,12 +1,12 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors, { type CorsOptions } from 'cors';
 import dotenv from 'dotenv';
-import healthRouter from './routes/health.routes';
-import secureLinkRouter from './routes/secureLink.routes';
-import rfqRouter from './routes/rfq.routes';
-import { rfqByTokenRouter } from './routes/rfq.byToken.routes';
-import { errorHandler } from './middleware/errorHandler';
-import { requestLogger } from './middleware/requestLogger';
+import healthRouter from './routes/health.routes.js';
+import secureLinkRouter from './routes/secureLink.routes.js';
+import rfqRouter from './routes/rfq.routes.js';
+import { rfqByTokenRouter } from './routes/rfq.byToken.routes.js';
+import { errorHandler } from './middleware/errorHandler.js';
+import { requestLogger } from './middleware/requestLogger.js';
 
 // Load environment variables
 dotenv.config();

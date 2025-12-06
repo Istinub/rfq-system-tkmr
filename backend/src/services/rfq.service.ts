@@ -1,5 +1,5 @@
 import type { RFQ, RFQRequest, SecureLink } from '@rfq-system/shared';
-import { SecureLinkService } from './secureLink.service';
+import { SecureLinkService } from './secureLink.service.js';
 
 export type RFQStatus = 'pending' | 'submitted' | 'processing' | 'completed' | 'cancelled';
 

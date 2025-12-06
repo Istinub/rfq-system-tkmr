@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { resolveSecureLinkByToken } from '../controllers/secureLink.controller';
+import { resolveSecureLinkByToken } from '../controllers/secureLink.controller.js';
 
 const rfqByTokenRouter = Router();
 

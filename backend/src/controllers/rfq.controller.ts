@@ -1,6 +1,6 @@
 import type { RequestHandler } from 'express';
 import { PrismaClient, Prisma } from '@prisma/client';
-import prisma from '../lib/prisma';
+import prisma from '../lib/prisma.js';
 
 type RFQItemInput = {
   name: string;

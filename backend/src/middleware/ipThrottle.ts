@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import { getBanRemainingSeconds, isBanned, registerFailure, resetFailures } from '../services/ipThrottle.service';
+import { getBanRemainingSeconds, isBanned, registerFailure, resetFailures } from '../services/ipThrottle.service.js';
 
 const BAN_MESSAGE = 'Too many failed attempts. Try again later.';
 

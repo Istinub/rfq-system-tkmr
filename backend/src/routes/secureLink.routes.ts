@@ -3,7 +3,7 @@ import {
   generateSecureLink,
   invalidateSecureLink,
   resolveSecureLinkByToken,
-} from '../controllers/secureLink.controller';
+} from '../controllers/secureLink.controller.js';
 
 const router = Router();
 
