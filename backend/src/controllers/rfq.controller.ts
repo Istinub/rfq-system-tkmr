@@ -1,5 +1,5 @@
 import type { RequestHandler } from 'express';
-import { Prisma } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
 
 type RFQItemInput = {
@@ -29,6 +29,8 @@ const rfqInclude = {
 } as const;
 
 type RFQWithRelations = Prisma.RFQGetPayload<{ include: typeof rfqInclude }>;
+type RFQItemRecord = RFQWithRelations['items'][number];
+type RFQAttachmentRecord = RFQWithRelations['attachments'][number];
 
 const ensureIdParam = (value: string | undefined) => value?.trim() ?? '';
 
@@ -39,13 +41,13 @@ const serializeRFQ = (rfq: RFQWithRelations) => ({
   contactEmail: rfq.contactEmail,
   contactPhone: rfq.contactPhone ?? null,
   createdAt: rfq.createdAt.toISOString(),
-  items: rfq.items.map((item) => ({
+  items: rfq.items.map((item: RFQItemRecord) => ({
     id: item.id,
     name: item.name,
     quantity: item.quantity,
     details: item.details ?? null,
   })),
-  attachments: rfq.attachments.map((attachment) => ({
+  attachments: rfq.attachments.map((attachment: RFQAttachmentRecord) => ({
     id: attachment.id,
     fileName: attachment.fileName,
     fileUrl: attachment.fileUrl,
@@ -84,14 +86,6 @@ const parseAttachments = (attachments: AttachmentInput[] | undefined): Attachmen
     .filter((attachment) => Boolean(attachment.fileName) && Boolean(attachment.fileUrl)) as AttachmentInput[];
 };
 
-const handlePrismaError = (error: unknown, res: Parameters<RequestHandler>[1]) => {
-  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-    res.status(404).json({ error: 'RFQ not found' });
-    return true;
-  }
-  return false;
-};
-
 export const createRFQ: RequestHandler = async (req, res) => {
   try {
     const { company, contactName, contactEmail, contactPhone, items, attachments } = req.body as CreateRFQBody;
@@ -109,7 +103,7 @@ export const createRFQ: RequestHandler = async (req, res) => {
 
     const attachmentPayload = parseAttachments(attachments);
 
-    const rfq = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const rfq = await prisma.$transaction(async (tx: PrismaClient) => {
       const created = await tx.rFQ.create({
         data: {
           company: company.trim(),
@@ -149,8 +143,8 @@ export const createRFQ: RequestHandler = async (req, res) => {
 
     return res.status(201).json({ rfq: serializeRFQ(rfq) });
   } catch (error: unknown) {
-    console.error('Failed to create RFQ', error);
-    return res.status(500).json({ error: 'Failed to create RFQ' });
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -173,8 +167,8 @@ export const getRFQ: RequestHandler = async (req, res) => {
 
     return res.json({ rfq: serializeRFQ(rfq) });
   } catch (error: unknown) {
-    console.error('Failed to fetch RFQ', error);
-    return res.status(500).json({ error: 'Failed to fetch RFQ' });
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -187,8 +181,8 @@ export const listRFQs: RequestHandler = async (_req, res) => {
 
     return res.json({ rfqs: rfqs.map(serializeRFQ) });
   } catch (error: unknown) {
-    console.error('Failed to list RFQs', error);
-    return res.status(500).json({ error: 'Failed to list RFQs' });
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -200,7 +194,7 @@ export const deleteRFQ: RequestHandler = async (req, res) => {
   }
 
   try {
-    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await prisma.$transaction(async (tx: PrismaClient) => {
       await tx.rFQItem.deleteMany({ where: { rfqId: id } });
       await tx.attachment.deleteMany({ where: { rfqId: id } });
       await tx.secureLink.deleteMany({ where: { rfqId: id } });
@@ -208,10 +202,13 @@ export const deleteRFQ: RequestHandler = async (req, res) => {
     });
     return res.json({ message: 'RFQ deleted' });
   } catch (error: unknown) {
-    if (handlePrismaError(error, res)) {
-      return;
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2025'
+    ) {
+      return res.status(404).json({ error: 'RFQ not found' });
     }
-    console.error('Failed to delete RFQ', error);
-    return res.status(500).json({ error: 'Failed to delete RFQ' });
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };

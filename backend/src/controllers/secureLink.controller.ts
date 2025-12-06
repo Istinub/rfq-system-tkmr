@@ -1,7 +1,9 @@
 import crypto from 'node:crypto';
 import type { RequestHandler } from 'express';
-import { Prisma } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
+
+const prismaClient: PrismaClient = prisma;
 
 const TOKEN_BYTES = 32;
 const LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -19,6 +21,9 @@ const secureLinkInclude = {
 
 type SecureLinkWithRelations = Prisma.SecureLinkGetPayload<{ include: typeof secureLinkInclude }>;
 type SecureLinkSerializable = SecureLinkWithRelations;
+type SecureLinkRFQ = SecureLinkWithRelations['rfq'];
+type SecureLinkRFQItem = SecureLinkRFQ['items'][number];
+type SecureLinkAttachment = SecureLinkRFQ['attachments'][number];
 
 const getRfqIdFromRequest = (req: Parameters<RequestHandler>[0]): string => {
   return req.params.rfqId?.trim() || (typeof req.body?.rfqId === 'string' ? req.body.rfqId.trim() : '');
@@ -26,20 +31,20 @@ const getRfqIdFromRequest = (req: Parameters<RequestHandler>[0]): string => {
 
 const ensureToken = (token: string | undefined): string => token?.trim() ?? '';
 
-const serializeRfq = (rfq: SecureLinkWithRelations['rfq']) => ({
+const serializeRfq = (rfq: SecureLinkRFQ) => ({
   id: rfq.id,
   company: rfq.company,
   contactName: rfq.contactName,
   contactEmail: rfq.contactEmail,
   contactPhone: rfq.contactPhone ?? null,
   createdAt: rfq.createdAt.toISOString(),
-  items: rfq.items.map((item) => ({
+  items: rfq.items.map((item: SecureLinkRFQItem) => ({
     id: item.id,
     name: item.name,
     quantity: item.quantity,
     details: item.details ?? null,
   })),
-  attachments: rfq.attachments.map((attachment) => ({
+  attachments: rfq.attachments.map((attachment: SecureLinkAttachment) => ({
     id: attachment.id,
     fileName: attachment.fileName,
     fileUrl: attachment.fileUrl,
@@ -85,7 +90,7 @@ export const generateSecureLink: RequestHandler = async (req, res) => {
     const expiresAt = new Date(Date.now() + ttlMs);
     const oneTime = parseOneTime(req.body?.oneTime);
 
-    const secureLink = await prisma.secureLink.create({
+    const secureLink = await prismaClient.secureLink.create({
       data: {
         token,
         rfq: { connect: { id: rfqId } },
@@ -106,8 +111,8 @@ export const generateSecureLink: RequestHandler = async (req, res) => {
       return res.status(404).json({ error: 'RFQ not found' });
     }
 
-    console.error('Failed to generate secure link', error);
-    return res.status(500).json({ error: 'Failed to generate secure link' });
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -119,7 +124,7 @@ export const resolveSecureLinkByToken: RequestHandler = async (req, res) => {
   }
 
   try {
-    const secureLink = await prisma.secureLink.findUnique({
+    const secureLink = await prismaClient.secureLink.findUnique({
       where: { token },
       include: secureLinkInclude,
     });
@@ -138,7 +143,7 @@ export const resolveSecureLinkByToken: RequestHandler = async (req, res) => {
 
     const firstAccessAt = secureLink.firstAccessAt ?? new Date();
 
-    const updatedSecureLink = await prisma.secureLink.update({
+    const updatedSecureLink = await prismaClient.secureLink.update({
       where: { id: secureLink.id },
       data: {
         firstAccessAt,
@@ -153,8 +158,8 @@ export const resolveSecureLinkByToken: RequestHandler = async (req, res) => {
       secureLink: serializeSecureLink(updatedSecureLink),
     });
   } catch (error: unknown) {
-    console.error('Failed to open secure link', error);
-    return res.status(500).json({ error: 'Failed to open secure link' });
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -166,7 +171,7 @@ export const invalidateSecureLink: RequestHandler = async (req, res) => {
   }
 
   try {
-    const secureLink = await prisma.secureLink.update({
+    const secureLink = await prismaClient.secureLink.update({
       where: { token },
       data: {
         expiresAt: new Date(),
@@ -183,7 +188,7 @@ export const invalidateSecureLink: RequestHandler = async (req, res) => {
       return res.status(404).json({ error: 'Secure link not found' });
     }
 
-    console.error('Failed to invalidate secure link', error);
-    return res.status(500).json({ error: 'Failed to invalidate secure link' });
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };

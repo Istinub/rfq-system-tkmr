@@ -2,7 +2,6 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
-    "emitDecoratorMetadata": false,
     "sourceMap": false
   },
   "include": ["src"]
