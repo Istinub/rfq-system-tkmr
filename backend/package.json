@@ -2,6 +2,7 @@
   "name": "@rfq-system-tkmr/backend",
   "version": "1.0.0",
   "description": "Backend API for RFQ System",
+  "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "prebuild": "npm run build --workspace=@rfq-system/shared",

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-const fs = require('node:fs');
-const path = require('node:path');
+import fs from 'node:fs';
+import path from 'node:path';
 
 const cwd = process.cwd();
 const sourceFile = path.resolve(cwd, 'dist', 'lib', 'prisma.js');
