@@ -98,7 +98,7 @@ export const generateSecureLink: RequestHandler = async (req, res) => {
     return res.status(201).json({
       secureLink: serializeSecureLink(secureLink),
     });
-  } catch (error) {
+  } catch (error: unknown) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2025'
@@ -152,7 +152,7 @@ export const resolveSecureLinkByToken: RequestHandler = async (req, res) => {
       rfq: serializeRfq(updatedSecureLink.rfq),
       secureLink: serializeSecureLink(updatedSecureLink),
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Failed to open secure link', error);
     return res.status(500).json({ error: 'Failed to open secure link' });
   }
@@ -175,7 +175,7 @@ export const invalidateSecureLink: RequestHandler = async (req, res) => {
     });
 
     return res.json({ secureLink: serializeSecureLink(secureLink) });
-  } catch (error) {
+  } catch (error: unknown) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2025'

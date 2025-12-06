@@ -7,6 +7,7 @@
     "prebuild": "npm run build --workspace=@rfq-system/shared",
     "build": "tsc -p tsconfig.build.json",
     "postbuild": "node ./scripts/copy-prisma.js",
+    "postinstall": "prisma generate",
     "dev": "nodemon --watch src --exec ts-node src/index.ts",
     "start": "node dist/index.js",
     "clean": "rm -rf dist",

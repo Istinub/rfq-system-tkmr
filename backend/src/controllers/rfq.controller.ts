@@ -59,9 +59,9 @@ const parseItems = (items: RFQItemInput[] | undefined): RFQItemInput[] => {
   }
 
   return items
-    .map((item) => ({
+    .map((item: RFQItemInput | undefined) => ({
       name: item?.name?.trim(),
-      quantity: Number(item?.quantity),
+      quantity: item ? Number(item.quantity) : Number.NaN,
       details: item?.details?.trim() || undefined,
     }))
     .filter((item) => Boolean(item.name) && Number.isFinite(item.quantity) && item.quantity > 0) as RFQItemInput[];
@@ -73,7 +73,7 @@ const parseAttachments = (attachments: AttachmentInput[] | undefined): Attachmen
   }
 
   return attachments
-    .map((attachment) => ({
+    .map((attachment: AttachmentInput | undefined) => ({
       fileName: attachment?.fileName?.trim(),
       fileUrl: attachment?.fileUrl?.trim(),
       fileSize:
@@ -109,7 +109,7 @@ export const createRFQ: RequestHandler = async (req, res) => {
 
     const attachmentPayload = parseAttachments(attachments);
 
-    const rfq = await prisma.$transaction(async (tx) => {
+    const rfq = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const created = await tx.rFQ.create({
         data: {
           company: company.trim(),
@@ -121,7 +121,7 @@ export const createRFQ: RequestHandler = async (req, res) => {
 
       if (itemPayload.length) {
         await tx.rFQItem.createMany({
-          data: itemPayload.map((item) => ({
+          data: itemPayload.map((item: RFQItemInput) => ({
             name: item.name,
             quantity: item.quantity,
             details: item.details,
@@ -132,7 +132,7 @@ export const createRFQ: RequestHandler = async (req, res) => {
 
       if (attachmentPayload.length) {
         await tx.attachment.createMany({
-          data: attachmentPayload.map((attachment) => ({
+          data: attachmentPayload.map((attachment: AttachmentInput) => ({
             fileName: attachment.fileName,
             fileUrl: attachment.fileUrl,
             fileSize: attachment.fileSize,
@@ -148,7 +148,7 @@ export const createRFQ: RequestHandler = async (req, res) => {
     });
 
     return res.status(201).json({ rfq: serializeRFQ(rfq) });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Failed to create RFQ', error);
     return res.status(500).json({ error: 'Failed to create RFQ' });
   }
@@ -172,7 +172,7 @@ export const getRFQ: RequestHandler = async (req, res) => {
     }
 
     return res.json({ rfq: serializeRFQ(rfq) });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Failed to fetch RFQ', error);
     return res.status(500).json({ error: 'Failed to fetch RFQ' });
   }
@@ -186,7 +186,7 @@ export const listRFQs: RequestHandler = async (_req, res) => {
     });
 
     return res.json({ rfqs: rfqs.map(serializeRFQ) });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Failed to list RFQs', error);
     return res.status(500).json({ error: 'Failed to list RFQs' });
   }
@@ -200,14 +200,14 @@ export const deleteRFQ: RequestHandler = async (req, res) => {
   }
 
   try {
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.rFQItem.deleteMany({ where: { rfqId: id } });
       await tx.attachment.deleteMany({ where: { rfqId: id } });
       await tx.secureLink.deleteMany({ where: { rfqId: id } });
       await tx.rFQ.delete({ where: { id } });
     });
     return res.json({ message: 'RFQ deleted' });
-  } catch (error) {
+  } catch (error: unknown) {
     if (handlePrismaError(error, res)) {
       return;
     }

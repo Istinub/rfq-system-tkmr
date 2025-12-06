@@ -1,6 +1,9 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "allowImportingTsExtensions": false
-  }
+    "noEmit": false,
+    "emitDecoratorMetadata": false,
+    "sourceMap": false
+  },
+  "include": ["src"]
 }
