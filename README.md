@@ -56,6 +56,60 @@ rfq-system-tkmr/
 └── README.md
 ```
 
+## Developer Workflow Diagram (Technical Architecture)
+
+```mermaid
+sequenceDiagram
+	participant A as Admin
+	participant F as Frontend (Quasar)
+	participant B as Backend API (Express)
+	participant S as SecureLink Service
+	participant V as Vendor
+
+	A->>F: Create RFQ
+	F->>B: POST /api/rfq
+	B->>S: Save RFQ Data
+	S-->>B: RFQ ID
+	B-->>F: RFQ Created
+
+	A->>F: Generate Secure Link
+	F->>B: POST /api/rfq/:id/secure-link
+	B->>S: generateToken()
+	S-->>B: token + expiry
+	B-->>F: secure link returned
+
+	B->>V: Email secure link (Outlook API)
+
+	V->>B: GET /api/secure/:token
+	B->>S: validate token
+	S-->>B: RFQ Data
+	B-->>V: Render RFQ details
+
+	V->>B: POST /api/rfq/:id/submit
+	B->>S: save submission
+	S-->>B: success
+	B-->>V: Submission OK
+```
+
+## Business Workflow Diagram (Client-Friendly)
+
+```
+Business Workflow Diagram
+TKMR Admin creates an RFQ in the system.
+
+System generates a secure vendor-specific link.
+
+System sends the secure link to each vendor via Outlook email.
+
+Vendor opens the link and views RFQ details.
+
+Vendor submits quotation and optional PDF documents.
+
+TKMR Admin reviews and compares all vendor submissions.
+
+TKMR selects winning vendor and proceeds with procurement.
+```
+
 ## 🚀 Getting Started
 
 ## 🌐 Live Deployment

@@ -14,11 +14,11 @@ const countRequests = (_req: Request, _res: Response, next: NextFunction) => {
     router.get('/', (_req, res) => {
       res.json({
           status: 'ok',
-              time: new Date().toISOString(),
-                  uptime: process.uptime(),
-                      memory: process.memoryUsage(),
-                          requests: requestCount,
-                            });
-                            });
+          time: new Date().toISOString(),
+          uptime: process.uptime(),
+          memory: process.memoryUsage(),
+          requests: requestCount,
+      });
+    });
 
-                            export default router;
+     export default router;

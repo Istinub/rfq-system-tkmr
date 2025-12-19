@@ -1,8 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 
-const ADMIN_KEY = process.env.ADMIN_API_KEY;
-
 export const apiKeyAuth = (req: Request, res: Response, next: NextFunction) => {
+  const ADMIN_KEY = process.env.ADMIN_API_KEY;   // <-- load dynamically
   const headerKey = req.header('x-api-key');
 
   if (!ADMIN_KEY) {

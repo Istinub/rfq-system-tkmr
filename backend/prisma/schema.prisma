@@ -26,6 +26,7 @@ model RFQ {
   items        RFQItem[]
   attachments  Attachment[]
   secureLinks  SecureLink[]
+  accessLogs   SecureLinkAccessLog[]
 }
 
 model RFQItem {
@@ -58,6 +59,37 @@ model SecureLink {
   oneTime      Boolean  @default(false)
   accessCount  Int      @default(0)
   lastAccessIP String?
+  disabled     Boolean  @default(false)
 
   rfq RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  logs SecureLinkAccessLog[]
+}
+
+model SecureLinkAccessLog {
+  id          String         @id @default(cuid())
+  secureLinkId String?
+  rfqId       String?
+  token       String
+  result      AccessResult
+  ip          String?
+  userAgent   String?
+  createdAt   DateTime       @default(now())
+
+  secureLink  SecureLink?    @relation(fields: [secureLinkId], references: [id], onDelete: SetNull)
+  rfq         RFQ?           @relation(fields: [rfqId], references: [id], onDelete: SetNull)
+}
+
+model AdminSetting {
+  id                String   @id @default("default")
+  tokenExpiryDays   Int      @default(7)
+  oneTimeAccess     Boolean  @default(false)
+  rateLimitPerMinute Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+enum AccessResult {
+  success
+  expired
+  disabled
 }
