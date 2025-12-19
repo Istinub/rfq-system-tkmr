@@ -2,6 +2,7 @@
   <q-layout view="hHh lpR fFf">
     <q-header elevated class="bg-primary text-white">
       <q-toolbar>
+        <div id="mobile-nav-slot" class="mobile-nav-slot" />
         <q-toolbar-title>
           <q-icon name="request_quote" size="sm" class="q-mr-sm" />
           RFQ System - TKMR
@@ -45,5 +46,17 @@ const showInfo = () => {
 .q-toolbar-title {
   display: flex;
   align-items: center;
+}
+
+.mobile-nav-slot {
+  display: none;
+  margin-right: 8px;
+}
+
+@media (max-width: 1023px) {
+  .mobile-nav-slot {
+    display: flex;
+    align-items: center;
+  }
 }
 </style>

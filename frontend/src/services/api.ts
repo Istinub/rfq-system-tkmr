@@ -1,7 +1,15 @@
 import axios, { type AxiosError } from 'axios';
 import { z } from 'zod';
-import { RFQSchema, type RFQRequest } from '@rfq-system/shared';
+import {
+  RFQSchema,
+  type RFQRequest,
+  CreateRFQResponseSchema,
+  type CreateRFQResponse,
+} from '@rfq-system/shared';
 
+// ======================
+// Types
+// ======================
 export interface HealthResponse {
   status: string;
   time: string;
@@ -19,27 +27,20 @@ export class ApiError extends Error {
   }
 }
 
-const resolvedBackendOrigin = (import.meta.env.VITE_BACKEND_ORIGIN ?? '').trim();
-const backendOrigin = resolvedBackendOrigin || 'https://rfq-system-tkmr-backend.onrender.com';
-
-const apiBaseUrl = import.meta.env.PROD
-  ? 'https://rfq-tkmr.netlify.app/api'
-  : '/api';
-
+// ======================
+// API BASE (PROXY MODE)
+// ======================
 const apiClient = axios.create({
-  baseURL: apiBaseUrl,
+  baseURL: '/api', // ✅ ALWAYS relative (Quasar proxy)
   timeout: 15000,
 });
 
 apiClient.defaults.headers.common['Content-Type'] = 'application/json';
 apiClient.defaults.headers.common.Accept = 'application/json';
 
-const CreateRFQResponseSchema = z.object({
-  data: RFQSchema.pick({ id: true }),
-});
-
-export type CreateRFQResponse = z.infer<typeof CreateRFQResponseSchema>['data'];
-
+// ======================================
+// Secure Link Metadata Schema
+// ======================================
 const SecureLinkMetadataSchema = z.object({
   token: z.string().min(1),
   rfqId: z.union([z.string().min(1), z.number().int().nonnegative()]),
@@ -59,43 +60,45 @@ const SecureLinkDetailsResponseSchema = z.object({
 export type SecureLinkMetadata = z.infer<typeof SecureLinkMetadataSchema>;
 export type SecureLinkDetailsResponse = z.infer<typeof SecureLinkDetailsResponseSchema>;
 
+// ======================================
+// Error Extraction
+// ======================================
 const extractErrorMessage = (error: AxiosError): string => {
   const { response, message: fallbackMessage } = error;
 
-  if (!response) {
-    return fallbackMessage || 'Request failed';
-  }
+  if (!response) return fallbackMessage || 'Request failed';
 
   const { data } = response;
 
-  if (typeof data === 'string') {
-    return data;
-  }
+  if (typeof data === 'string') return data;
 
   if (data && typeof data === 'object') {
     const record = data as Record<string, unknown>;
 
-    if (typeof record.message === 'string' && record.message.trim().length > 0) {
+    if (typeof record.message === 'string' && record.message.trim()) {
       return record.message;
     }
 
     if (Array.isArray(record.errors) && record.errors.length > 0) {
       const first = record.errors[0];
-      if (typeof first === 'string') {
-        return first;
-      }
+      if (typeof first === 'string') return first;
     }
   }
 
   return fallbackMessage || 'Request failed';
 };
 
+// ======================================
+// Global Response Interceptor
+// ======================================
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (axios.isAxiosError(error)) {
       const message = extractErrorMessage(error);
-      return Promise.reject(new ApiError(message, error.response?.status, error.response?.data));
+      return Promise.reject(
+        new ApiError(message, error.response?.status, error.response?.data)
+      );
     }
 
     if (error instanceof Error) {
@@ -106,84 +109,63 @@ apiClient.interceptors.response.use(
   }
 );
 
+// ======================================
+// Health Check (PROXY)
+// ======================================
 export const healthCheck = async (): Promise<HealthResponse> => {
-  const normalizedOrigin = backendOrigin.replace(/\/$/, '');
-  const healthUrl = normalizedOrigin ? `${normalizedOrigin}/health` : '/health';
-
-  try {
-    const { data } = await axios.get<HealthResponse>(healthUrl, {
-      timeout: 15000,
-      headers: {
-        Accept: 'application/json',
-      },
-    });
-    return data;
-  } catch (error) {
-    if (axios.isAxiosError(error)) {
-      const message = extractErrorMessage(error);
-      throw new ApiError(message, error.response?.status, error.response?.data);
-    }
-
-    if (error instanceof Error) {
-      throw new ApiError(error.message);
-    }
-
-    throw new ApiError('Unable to reach health endpoint');
-  }
+  const { data } = await apiClient.get<HealthResponse>('/health');
+  return data;
 };
 
-export const createRFQ = async (rfq: RFQRequest): Promise<CreateRFQResponse> => {
+// ======================================
+// CREATE RFQ
+// Backend payload:
+// { rfq: {...}, secureLink?: {...} }
+// ======================================
+export const createRFQ = async (
+  rfq: RFQRequest
+): Promise<CreateRFQResponse> => {
   const { data } = await apiClient.post('/rfq', rfq);
-  const parsed = CreateRFQResponseSchema.safeParse(data);
 
+  const parsed = CreateRFQResponseSchema.safeParse(data);
   if (!parsed.success) {
-    throw new ApiError('Invalid RFQ response payload', 500, parsed.error.flatten());
+    console.error(parsed.error);
+    throw new ApiError(
+      'Invalid RFQ response payload',
+      500,
+      parsed.error.flatten()
+    );
   }
 
-  return parsed.data.data;
+  return parsed.data;
 };
 
-export const getSecureLinkDetails = async (token: string): Promise<SecureLinkDetailsResponse> => {
+// ======================================
+// Secure Link Details
+// ======================================
+export const getSecureLinkDetails = async (
+  token: string
+): Promise<SecureLinkDetailsResponse> => {
   const trimmedToken = token.trim();
 
   if (!trimmedToken) {
     throw new ApiError('Secure token is required.');
   }
 
-  try {
-    const { data } = await apiClient.get(`/secure/${encodeURIComponent(trimmedToken)}`);
-    const parsed = SecureLinkDetailsResponseSchema.safeParse(data);
+  const { data } = await apiClient.get(
+    `/secure-link/${encodeURIComponent(trimmedToken)}`
+  );
 
-    if (!parsed.success) {
-      throw new ApiError('Invalid secure link payload received', 500, parsed.error.flatten());
-    }
-
-    return parsed.data;
-  } catch (error) {
-    if (error instanceof ApiError) {
-      if (error.status === 400) {
-        throw new ApiError('Secure token is invalid. Please check the link and try again.', error.status, error.payload);
-      }
-
-      if (error.status === 404) {
-        throw new ApiError('No RFQ found for this secure token.', error.status, error.payload);
-      }
-
-      if (error.status === 410) {
-        throw new ApiError('This secure link has expired. Request a new secure link.', error.status, error.payload);
-      }
-
-      if (error.status && error.status >= 400 && error.status < 500) {
-        throw new ApiError('Unable to validate secure token.', error.status, error.payload);
-      }
-    }
-
-    if (error instanceof Error) {
-      throw error;
-    }
-
-    throw new ApiError('Unable to load secure link details');
+  const parsed = SecureLinkDetailsResponseSchema.safeParse(data);
+  if (!parsed.success) {
+    throw new ApiError(
+      'Invalid secure link payload received',
+      500,
+      parsed.error.flatten()
+    );
   }
+
+  return parsed.data;
 };
 
 export default apiClient;

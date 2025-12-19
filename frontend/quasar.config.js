@@ -1,20 +1,12 @@
 /* eslint-env node */
 
-/*
- * This file runs in a Node context (it's NOT transpiled by Babel), so use only
- * the ES6 features that are supported by your Node version. https://node.green/
- */
-
-// Configuration for your app
-// https://v2.quasar.dev/quasar-cli-vite/quasar-config-js
-
 import { configure } from 'quasar/wrappers';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-export default configure(function (/* ctx */) {
+export default configure(function () {
   return {
     eslint: {
       warnings: false,
@@ -37,6 +29,7 @@ export default configure(function (/* ctx */) {
       },
 
       vueRouterMode: 'hash',
+
       extendViteConf(viteConf) {
         viteConf.resolve = viteConf.resolve || {};
         viteConf.resolve.alias = {
@@ -46,9 +39,26 @@ export default configure(function (/* ctx */) {
       },
     },
 
+    /**
+     * ==============================
+     * DEV SERVER (IMPORTANT)
+     * ==============================
+     * Browser → Quasar (9000)
+     * Quasar → Backend (5000)
+     * No CORS involved at all
+     */
     devServer: {
       open: true,
       port: 9000,
+      strictPort: true,
+
+      proxy: {
+        '/api': {
+          target: 'http://localhost:5000',
+          changeOrigin: true,
+          secure: false,
+        },
+      },
     },
 
     framework: {
@@ -61,9 +71,7 @@ export default configure(function (/* ctx */) {
     ssr: {
       pwa: false,
       prodPort: 3000,
-      middlewares: [
-        'render',
-      ],
+      middlewares: ['render'],
     },
 
     pwa: {

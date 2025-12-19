@@ -1,65 +1,122 @@
 <template>
-  <q-card class="nav-card q-pa-md">
-    <div class="nav-header text-subtitle1 text-weight-bold">Offer Navigation</div>
-    <q-input
-      dense
-      outlined
-      clearable
-      v-model="searchTerm"
-      placeholder="Search sections"
-      debounce="150"
-      class="q-mb-md"
-    >
-      <template #prepend>
-        <q-icon name="search" />
-      </template>
-    </q-input>
-    <q-scroll-area class="nav-scroll" visible>
-      <q-list padding class="nav-list">
-        <template v-if="filteredSections.length">
-          <div
-            v-for="section in filteredSections"
-            :key="section.id"
-            class="nav-section"
+  <div>
+    <teleport v-if="isMobile && hasHeaderSlot" to="#mobile-nav-slot">
+      <div class="nav-menu-icon">
+        <q-btn round dense color="white" text-color="primary" icon="menu" unelevated>
+          <q-menu
+            class="nav-menu-popup"
+            :anchor="'bottom left'"
+            :self="'top left'"
+            :offset="[0, 8]"
+            :cover="false"
           >
-            <q-item
-              clickable
-              v-ripple
-              :active="props.activeSection === section.id"
-              :class="[
-                'nav-section-item',
-                props.activeSection === section.id ? 'nav-section-item--active' : '',
-              ]"
-              @click="handleScroll(section.id)"
+            <div class="nav-menu-header q-pa-md">
+              <div class="text-subtitle2 text-weight-bold">Navigation</div>
+              <q-btn dense flat round icon="close" v-close-popup />
+            </div>
+            <div class="q-pa-md menu-search">
+              <q-input
+                dense
+                outlined
+                clearable
+                v-model="searchTerm"
+                placeholder="Search sections"
+                debounce="150"
+              >
+                <template #prepend>
+                  <q-icon name="search" />
+                </template>
+              </q-input>
+            </div>
+            <q-list separator style="min-width: 260px" class="nav-menu-list">
+              <template v-if="filteredSections.length">
+                <q-item
+                  v-for="section in filteredSections"
+                  :key="section.id"
+                  clickable
+                  v-close-popup
+                  @click="handleScroll(section.id)"
+                >
+                  <q-item-section>
+                    <q-item-label class="section-label">{{ section.label }}</q-item-label>
+                    <q-item-label caption v-if="section.children?.length">
+                      {{ section.children.length }} subsection{{ section.children.length > 1 ? 's' : '' }}
+                    </q-item-label>
+                  </q-item-section>
+                </q-item>
+              </template>
+              <q-item v-else>
+                <q-item-section>No sections found</q-item-section>
+              </q-item>
+            </q-list>
+          </q-menu>
+        </q-btn>
+      </div>
+    </teleport>
+
+    <q-card v-if="!isMobile" class="nav-card q-pa-md">
+      <div class="nav-header text-subtitle1 text-weight-bold">Navigation Bar</div>
+      <q-input
+        dense
+        outlined
+        clearable
+        v-model="searchTerm"
+        placeholder="Search sections"
+        debounce="150"
+        class="q-mb-md"
+      >
+        <template #prepend>
+          <q-icon name="search" />
+        </template>
+      </q-input>
+      <q-scroll-area class="nav-scroll" visible>
+        <q-list padding class="nav-list">
+          <template v-if="filteredSections.length">
+            <div
+              v-for="section in filteredSections"
+              :key="section.id"
+              class="nav-section"
             >
-              <q-item-section avatar class="nav-indicator-wrapper">
-                <span
-                  :class="[
-                    'nav-indicator',
-                    props.activeSection === section.id ? 'nav-indicator--active' : '',
-                  ]"
-                />
-              </q-item-section>
-              <q-item-section class="nav-section-content">
-                <div class="section-label">{{ section.label }}</div>
-              </q-item-section>
-            </q-item>
-            <div v-if="section.children && section.children.length" class="nav-subitems">
-              <div v-for="child in section.children" :key="child.label" class="nav-subitem">
-                <span class="nav-subitem-icon" />
-                <span class="nav-subitem-label">{{ child.label }}</span>
+              <q-item
+                clickable
+                v-ripple
+                :active="props.activeSection === section.id"
+                :class="[
+                  'nav-section-item',
+                  props.activeSection === section.id ? 'nav-section-item--active' : '',
+                ]"
+                @click="handleScroll(section.id)"
+              >
+                <q-item-section avatar class="nav-indicator-wrapper">
+                  <span
+                    :class="[
+                      'nav-indicator',
+                      props.activeSection === section.id ? 'nav-indicator--active' : '',
+                    ]"
+                  />
+                </q-item-section>
+                <q-item-section class="nav-section-content">
+                  <div class="section-label">{{ section.label }}</div>
+                </q-item-section>
+              </q-item>
+              <div v-if="section.children && section.children.length" class="nav-subitems">
+                <div v-for="child in section.children" :key="child.label" class="nav-subitem">
+                  <span class="nav-subitem-icon" />
+                  <span class="nav-subitem-label">{{ child.label }}</span>
+                </div>
               </div>
             </div>
-          </div>
-        </template>
-        <div v-else class="text-grey text-caption">No matching sections</div>
-      </q-list>
-    </q-scroll-area>
-  </q-card>
+          </template>
+          <div v-else class="text-grey text-caption">No matching sections</div>
+        </q-list>
+      </q-scroll-area>
+    </q-card>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { useQuasar } from 'quasar';
 
 type SectionChild = {
   label: string;
@@ -80,7 +137,10 @@ const emit = defineEmits<{
   (e: 'scrollTo', id: string): void;
 }>();
 
+const $q = useQuasar();
 const searchTerm = ref('');
+const hasHeaderSlot = ref(false);
+const isMobile = computed(() => $q.screen.lt.md);
 
 const filteredSections = computed(() => {
   const term = searchTerm.value.trim().toLowerCase();
@@ -97,9 +157,42 @@ const filteredSections = computed(() => {
 const handleScroll = (sectionId: string) => {
   emit('scrollTo', sectionId);
 };
+
+
+onMounted(() => {
+  hasHeaderSlot.value = Boolean(document.getElementById('mobile-nav-slot'));
+});
 </script>
 
 <style scoped lang="scss">
+.nav-menu-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-menu-popup {
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.nav-menu-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.nav-menu-popup .menu-search {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.nav-menu-list {
+  flex-grow: 1;
+  overflow-y: auto;
+}
+
 .nav-card {
   display: flex;
   flex-direction: column;

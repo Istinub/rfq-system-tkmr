@@ -2,7 +2,7 @@ import { createApp } from 'vue';
 import { Quasar, Notify, Loading } from 'quasar';
 import App from './App.vue';
 import router from './router';
-import { createPinia } from 'pinia';
+import { getPinia } from './stores';
 
 // Import Quasar css
 import 'quasar/dist/quasar.css';
@@ -23,7 +23,7 @@ app.use(Quasar, {
   },
 });
 
-app.use(createPinia());
+app.use(getPinia());
 app.use(router);
 
 app.mount('#app');
