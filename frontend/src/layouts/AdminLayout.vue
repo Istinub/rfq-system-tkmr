@@ -79,12 +79,9 @@
     </q-drawer>
 
     <q-page-container class="bg-grey-2">
-      <router-view v-if="isAuthenticated" />
-      <div v-else class="admin-locked flex column items-center justify-center text-grey-6">
-        <q-icon name="lock" size="56px" class="q-mb-md" />
-        <div class="text-h6">Admin area locked</div>
-        <div class="text-body2">Please login with your API key to continue.</div>
-      </div>
+      <q-page class="admin-page">
+        <router-view />
+      </q-page>
     </q-page-container>
   </q-layout>
 </template>
@@ -170,7 +167,7 @@ watch(isAuthenticated, (value) => {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.admin-locked {
+.admin-page {
   min-height: calc(100vh - 56px);
 }
 </style>

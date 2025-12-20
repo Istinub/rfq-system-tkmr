@@ -31,9 +31,11 @@ Configure the following variables in Render’s **Environment** tab:
 | Key                      | Example Value                                      | Notes |
 |--------------------------|----------------------------------------------------|-------|
 | `NODE_ENV`               | `production`                                       | Ensures production logging/behaviour |
+| `ADMIN_API_KEY`          | `tkmr_prod_secret`                                 | Required for every admin route |
+| `DATABASE_URL`           | `postgresql://user:pass@host:5432/db`              | Prisma connection string |
+| `CORS_ORIGINS`           | `https://your-frontend-domain.onrender.com`        | Comma-separated list of allowed origins |
 | `PORT`                   | `10000` (Render injects this automatically)        | Keep placeholder in `.env`, Render overrides it |
 | `FRONTEND_URL`           | `https://your-frontend-domain.onrender.com`        | Used to build secure link URLs |
-| `CORS_ORIGINS`           | `https://your-frontend-domain.onrender.com`        | Comma-separated list of allowed origins |
 | `SECURE_LINK_TTL_MINUTES`| `10080`                                            | Default 7 day expiry |
 
 > Render sets the `PORT` environment variable automatically. The server reads it and falls back to `5000` when not provided, so no code adjustments are required.
@@ -57,13 +59,24 @@ backend/
 
 Ensure `tsconfig.json` continues to emit JavaScript into `dist/` and that `npm start` executes `node dist/index.js`.
 
-## 5. Enabling CORS for the Frontend Domain
+## 5. Required Environment Variables & Failure Symptoms
+
+These values are mandatory for a healthy production deploy:
+
+- `NODE_ENV`: Must be `production` so that strict CORS rules are enforced. Leaving it undefined keeps dev defaults and hides warnings.
+- `ADMIN_API_KEY`: If missing, `/api/admin/*` responds with HTTP 503 and the admin dashboard will fail authentication.
+- `DATABASE_URL`: Without a valid URL Prisma cannot connect; `/health/detailed` will report `prisma.status = error` and admin queries will fail.
+- `CORS_ORIGINS`: When undefined or blank in production the backend blocks every browser request. Set it to the full frontend origin (multiple origins comma-separated).
+
+Use the `/health/detailed` endpoint after each deploy to verify that `adminApiKeyConfigured`, `databaseConfigured`, and the Prisma status are all healthy.
+
+## 6. Enabling CORS for the Frontend Domain
 
 1. Set `CORS_ORIGINS` in Render’s Environment tab to the fully qualified frontend URL (multiple origins comma-separated).
-2. The server reads `CORS_ORIGINS` and restricts CORS to those values. If the variable is omitted, all origins are allowed (development default).
+2. The server reads `CORS_ORIGINS` and restricts CORS to those values. In production, leaving the list empty blocks all browser requests as a safety filter.
 3. If the frontend domain changes, update `CORS_ORIGINS` and redeploy.
 
-## 6. Deployment Flow
+## 7. Deployment Flow
 
 1. Push your changes to the configured branch.
 2. Render detects the push, runs `npm install && npm run build` in `backend/`.
@@ -79,7 +92,7 @@ Ensure `tsconfig.json` continues to emit JavaScript into `dist/` and that `npm s
    ```
 5. Test the `/health` endpoint and a secure link request using the deployed URL.
 
-## 7. Future Enhancements
+## 8. Future Enhancements
 
 - Configure Render’s **Health Check Path** to `/health` for automated restarts.
 - Add background jobs or cron tasks later using Render cron jobs if needed.

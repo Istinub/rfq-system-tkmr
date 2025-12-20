@@ -1,5 +1,4 @@
-import 'dotenv/config';
-import dotenv from 'dotenv';
+import './config/loadEnv.js';
 import express, { Request, Response } from 'express';
 import cors, { type CorsOptions } from 'cors';
 
@@ -10,8 +9,6 @@ import { rfqByTokenRouter } from './routes/rfq.byToken.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import adminRouter from './routes/admin.routes.js';
-
-dotenv.config();
 
 const app = express();
 const PORT = Number.parseInt(process.env.PORT ?? '', 10) || 5000;
@@ -26,7 +23,34 @@ const resolvedCorsOrigins = (process.env.CORS_ORIGINS ?? '')
   .map((o) => o.trim())
   .filter(Boolean);
 
-const isDev = process.env.NODE_ENV !== 'production';
+const isProd = process.env.NODE_ENV === 'production';
+const isDev = !isProd;
+
+const logStartupWarnings = () => {
+  if (!isProd) {
+    return;
+  }
+
+  if (!process.env.ADMIN_API_KEY) {
+    console.warn(
+      '⚠️  ADMIN_API_KEY is not configured. Admin API routes will reject every request.'
+    );
+  }
+
+  if (!process.env.DATABASE_URL) {
+    console.warn(
+      '⚠️  DATABASE_URL is not configured. Prisma cannot connect and admin features will fail.'
+    );
+  }
+
+  if (!process.env.CORS_ORIGINS || resolvedCorsOrigins.length === 0) {
+    console.warn(
+      '⚠️  CORS_ORIGINS is empty in production. Browser requests will be blocked until valid origins are provided.'
+    );
+  }
+};
+
+logStartupWarnings();
 
 const corsOptions: CorsOptions = isDev
   ? {

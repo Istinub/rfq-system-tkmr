@@ -6,7 +6,9 @@ export const apiKeyAuth = (req: Request, res: Response, next: NextFunction) => {
 
   if (!ADMIN_KEY) {
     console.warn('ADMIN_API_KEY not set; denying admin route access.');
-    return res.status(500).json({ message: 'Admin access not configured' });
+    return res
+      .status(503)
+      .json({ message: 'ADMIN_API_KEY is not configured on the server' });
   }
 
   if (!headerKey || headerKey !== ADMIN_KEY) {
