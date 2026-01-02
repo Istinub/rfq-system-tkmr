@@ -100,7 +100,12 @@
                 </q-item-section>
               </q-item>
               <div v-if="section.children && section.children.length" class="nav-subitems">
-                <div v-for="child in section.children" :key="child.label" class="nav-subitem">
+                <div
+                  v-for="child in section.children"
+                  :key="child.id"
+                  class="nav-subitem"
+                  @click="handleScroll(child.id)"
+                >
                   <span class="nav-subitem-icon" />
                   <span class="nav-subitem-label">{{ child.label }}</span>
                 </div>
@@ -119,6 +124,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useQuasar } from 'quasar';
 
 type SectionChild = {
+  id: string;
   label: string;
 };
 
@@ -134,7 +140,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'scrollTo', id: string): void;
+  (e: 'scroll-to', id: string): void;
 }>();
 
 const $q = useQuasar();
@@ -155,7 +161,7 @@ const filteredSections = computed(() => {
 });
 
 const handleScroll = (sectionId: string) => {
-  emit('scrollTo', sectionId);
+  emit('scroll-to', sectionId);
 };
 
 
@@ -198,12 +204,17 @@ onMounted(() => {
   flex-direction: column;
   border-radius: 16px;
   background: #ffffff;
-  position: sticky;
-  top: 96px;
-  height: calc(100vh - 120px);
   box-shadow: 0 24px 48px -28px rgba(15, 23, 42, 0.4), 0 18px 32px -30px rgba(15, 23, 42, 0.25);
   border: 1px solid rgba(15, 23, 42, 0.05);
   overflow: hidden;
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .nav-card {
+    height: calc(100vh - 140px);
+    max-height: calc(100vh - 140px);
+  }
 }
 
 .nav-header {
@@ -214,7 +225,8 @@ onMounted(() => {
 }
 
 .nav-scroll {
-  flex-grow: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding-bottom: 12px;
 }

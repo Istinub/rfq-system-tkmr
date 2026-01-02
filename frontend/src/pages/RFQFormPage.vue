@@ -3,7 +3,13 @@
     <q-form ref="formRef" class="page-form" @submit.prevent="onSubmit">
       <div class="row q-col-gutter-xl">
         <div class="col-12 col-md-3">
-          <OfferNavigation :sections="navigationSections" :active-section="activeSection" @scroll-to="scrollTo" />
+          <div class="nav-sticky">
+            <OfferNavigation
+              :sections="navigationSections"
+              :active-section="activeSection"
+              @scroll-to="scrollTo"
+            />
+          </div>
         </div>
 
         <div class="col-12 col-md-9 sections-column">
@@ -58,15 +64,19 @@
                 <SectionTitle label="Requested Items" />
                 <div class="helper-text q-mb-md">List the products or services needed. At least one item is required.</div>
                 <div class="column q-gutter-md">
-                  <RFQItemRow
+                  <div
                     v-for="(item, index) in form.items"
                     :key="item.id"
-                    :item="item"
-                    :index="index"
-                    :removable="form.items.length > 1"
-                    @update:item="updateItem(index, $event)"
-                    @remove="removeItem"
-                  />
+                    :id="`requested-item-${index}`"
+                  >
+                    <RFQItemRow
+                      :item="item"
+                      :index="index"
+                      :removable="form.items.length > 1"
+                      @update:item="updateItem(index, $event)"
+                      @remove="removeItem"
+                    />
+                  </div>
                 </div>
                 <div class="row justify-end q-mt-md">
                   <q-btn
@@ -92,6 +102,18 @@
         </div>
       </div>
     </q-form>
+
+    <div class="group-strip q-mt-xl">
+      <q-separator spaced />
+      <div class="group-strip-inner">
+        <div class="text-caption text-weight-bold text-grey-8">Companies of the TKMR</div>
+        <div class="group-logos">
+          <q-img :src="tkmrLogo" class="group-logo" fit="contain" />
+          <q-img :src="ptTkmrLogo" class="group-logo" fit="contain" />
+          <q-img :src="devTechLogo" class="group-logo" fit="contain" />
+        </div>
+      </div>
+    </div>
   </q-page>
 </template>
 
@@ -105,6 +127,10 @@ import OfferNavigation from '../components/OfferNavigation.vue';
 import { emailRule, required } from '../validation/rules';
 import { createRFQ } from '../services/api';
 import type { RFQRequest } from '@rfq-system/shared';
+
+const tkmrLogo = new URL('../../resources/TKMR.png', import.meta.url).href;
+const ptTkmrLogo = new URL('../../resources/PT TKMR.png', import.meta.url).href;
+const devTechLogo = new URL('../../resources/TKMR Engineering PTE. LTD.png', import.meta.url).href;
 
 const phoneInputRule = (value: string | null | undefined): true | string => {
   if (!value || value.trim().length === 0) {
@@ -122,6 +148,7 @@ type FormItem = {
 };
 
 type SectionChild = {
+  id: string;
   label: string;
 };
 
@@ -151,6 +178,7 @@ const baseSections: SectionInfo[] = [
 
 const $q = useQuasar();
 const formRef = ref();
+const infoBtnRef = ref();
 const isSubmitting = ref(false);
 const activeSection = ref(baseSections[0].id);
 
@@ -177,7 +205,7 @@ const navigationSections = computed(() =>
     if (section.id === 'requested-items') {
       return {
         ...section,
-        children: form.items.map((_, index) => ({ label: `Item #${index + 1}` })),
+        children: form.items.map((_, index) => ({ id: `requested-item-${index}`, label: `Item #${index + 1}` })),
       };
     }
     return section;
@@ -280,7 +308,8 @@ const handleSubmit = async () => {
 
   try {
     const payload = await buildPayload();
-    const { id } = await createRFQ(payload);
+    const { rfq: { id } } = await createRFQ(payload);
+
 
     $q.notify({
       type: 'positive',
@@ -366,6 +395,23 @@ const onSubmit = () => {
   margin: 0 auto;
 }
 
+.brand-header {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.brand-logo {
+  width: 32px;
+  max-height: 32px;
+}
+
+@media (max-width: 767px) {
+  .brand-logo {
+    width: 28px;
+    max-height: 28px;
+  }
+}
+
 .sections-column {
   display: flex;
   flex-direction: column;
@@ -375,6 +421,15 @@ const onSubmit = () => {
 
 .section-card {
   background: white;
+}
+
+@media (min-width: 1024px) {
+  .nav-sticky {
+    position: sticky;
+    top: 96px;
+    align-self: flex-start;
+    width: 100%;
+  }
 }
 
 .section-subheading {
@@ -408,5 +463,51 @@ const onSubmit = () => {
   border-top: 1px solid #dce0e5;
   z-index: 100;
   box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.group-strip {
+  max-width: 1200px;
+  margin: 0 auto 24px;
+}
+
+.group-strip-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.group-logos {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: nowrap;
+  width: 100%;
+}
+
+.group-logo {
+  width: 180px;
+  height: 48px;
+  max-width: 200px;
+}
+
+.group-logo :deep(img) {
+  height: 100%;
+  width: auto;
+  object-fit: contain;
+  display: block;
+}
+
+@media (max-width: 767px) {
+  .group-logos {
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .group-logo {
+    width: 150px;
+    height: 36px;
+  }
 }
 </style>

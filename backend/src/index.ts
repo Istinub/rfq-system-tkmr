@@ -26,6 +26,18 @@ const resolvedCorsOrigins = (process.env.CORS_ORIGINS ?? '')
 const isProd = process.env.NODE_ENV === 'production';
 const isDev = !isProd;
 
+const logDevDatabaseStatus = () => {
+  if (!isDev) {
+    return;
+  }
+
+  const url = process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL) : null;
+  const host = url?.hostname ?? '(not set)';
+  const db = url?.pathname ? url.pathname.replace('/', '') : '(not set)';
+  console.log(`   DB env set : ${process.env.DATABASE_URL ? 'yes' : 'no'}`);
+  console.log(`   DB target  : host=${host} db=${db}`);
+};
+
 const logStartupWarnings = () => {
   if (!isProd) {
     return;
@@ -51,6 +63,7 @@ const logStartupWarnings = () => {
 };
 
 logStartupWarnings();
+logDevDatabaseStatus();
 
 const corsOptions: CorsOptions = isDev
   ? {
