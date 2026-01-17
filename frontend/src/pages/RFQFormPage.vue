@@ -94,9 +94,20 @@
 
           <div class="action-bar">
             <div class="row justify-end items-center q-gutter-sm q-pa-md">
+              <div v-if="submitStatusMessage" class="text-caption text-primary q-mr-md">
+                {{ submitStatusMessage }}
+              </div>
               <q-btn flat color="grey-7" label="Cancel" @click="onReset" :disable="isSubmitting" />
               <q-btn outline color="primary" icon="upload" label="Export" @click="onExport" :disable="isSubmitting" />
-              <q-btn unelevated color="primary" icon="save" label="Save Offer" @click="onSubmit" :loading="isSubmitting" />
+              <q-btn
+                unelevated
+                color="primary"
+                icon="save"
+                label="Save Offer"
+                @click="onSubmit"
+                :loading="isSubmitting"
+                :disable="isSubmitting"
+              />
             </div>
           </div>
         </div>
@@ -106,7 +117,7 @@
     <div class="group-strip q-mt-xl">
       <q-separator spaced />
       <div class="group-strip-inner">
-        <div class="text-caption text-weight-bold text-grey-8">Companies of the TKMR</div>
+        <div class="text-caption text-weight-bold text-grey-8">Companies of TKMR</div>
         <div class="group-logos">
           <q-img :src="tkmrLogo" class="group-logo" fit="contain" />
           <q-img :src="ptTkmrLogo" class="group-logo" fit="contain" />
@@ -125,8 +136,7 @@ import RFQItemRow from '../components/RFQItemRow.vue';
 import FileUpload from '../components/FileUpload.vue';
 import OfferNavigation from '../components/OfferNavigation.vue';
 import { emailRule, required } from '../validation/rules';
-import { createRFQ } from '../services/api';
-import type { RFQRequest } from '@rfq-system/shared';
+import { ApiError, createRFQMultipart } from '../services/api';
 
 const tkmrLogo = new URL('../../resources/TKMR.png', import.meta.url).href;
 const ptTkmrLogo = new URL('../../resources/PT TKMR.png', import.meta.url).href;
@@ -180,6 +190,7 @@ const $q = useQuasar();
 const formRef = ref();
 const infoBtnRef = ref();
 const isSubmitting = ref(false);
+const submitStatusMessage = ref('');
 const activeSection = ref(baseSections[0].id);
 
 const createBlankItem = (): FormItem => ({
@@ -238,27 +249,7 @@ const updateItem = (index: number, value: ItemUpdatePayload) => {
   };
 };
 
-const fileToBase64 = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : '';
-      resolve(result);
-    };
-    reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'));
-    reader.readAsDataURL(file);
-  });
-
-const buildPayload = async (): Promise<RFQRequest> => {
-  const attachments = await Promise.all(
-    form.attachments.map(async (file) => ({
-      fileName: file.name,
-      fileUrl: await fileToBase64(file),
-      fileSize: file.size,
-    }))
-  );
-  const attachmentPayload = attachments.filter((entry) => entry.fileUrl.length > 0);
-
+const buildMultipartPayload = (): FormData => {
   const itemsPayload = form.items
     .map(({ name, quantity, details }) => ({
       name: name.trim(),
@@ -271,14 +262,22 @@ const buildPayload = async (): Promise<RFQRequest> => {
     throw new Error('Add at least one requested item before submitting.');
   }
 
-  return {
-    company: form.companyName.trim(),
-    contactName: form.contactPerson.trim(),
-    contactEmail: form.email.trim(),
-    contactPhone: form.phone.trim() || undefined,
-    items: itemsPayload,
-    attachments: attachmentPayload.length ? attachmentPayload : undefined,
-  };
+  const formData = new FormData();
+
+  formData.append('company', form.companyName.trim());
+  formData.append('contactName', form.contactPerson.trim());
+  formData.append('contactEmail', form.email.trim());
+  if (form.phone.trim()) {
+    formData.append('contactPhone', form.phone.trim());
+  }
+
+  formData.append('items', JSON.stringify(itemsPayload));
+
+  for (const file of form.attachments) {
+    formData.append('files', file, file.name);
+  }
+
+  return formData;
 };
 
 const resetForm = () => {
@@ -305,10 +304,11 @@ const handleSubmit = async () => {
   }
 
   isSubmitting.value = true;
+  submitStatusMessage.value = 'Submitting RFQ... uploading attachments';
 
   try {
-    const payload = await buildPayload();
-    const { rfq: { id } } = await createRFQ(payload);
+    const formData = buildMultipartPayload();
+    const { rfq: { id } } = await createRFQMultipart(formData);
 
 
     $q.notify({
@@ -320,13 +320,29 @@ const handleSubmit = async () => {
     resetForm();
   } catch (error) {
     console.error('RFQ submission failed', error);
-    $q.notify({
-      type: 'negative',
-      message: error instanceof Error ? error.message : 'Unable to submit RFQ',
-      position: 'top',
-    });
+    const isApiError = error instanceof ApiError;
+    const normalizedMessage = isApiError ? error.message.toLowerCase() : '';
+    const timedOut =
+      (isApiError && error.status === 408) ||
+      (typeof normalizedMessage === 'string' && normalizedMessage.includes('timed out'));
+
+    if (timedOut) {
+      $q.notify({
+        type: 'warning',
+        message:
+          'Upload timed out, but your RFQ may have been submitted. Please check the RFQ list before trying again.',
+        position: 'top',
+      });
+    } else {
+      $q.notify({
+        type: 'negative',
+        message: error instanceof Error ? error.message : 'Unable to submit RFQ',
+        position: 'top',
+      });
+    }
   } finally {
     isSubmitting.value = false;
+    submitStatusMessage.value = '';
   }
 };
 

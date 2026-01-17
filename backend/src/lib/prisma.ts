@@ -4,8 +4,10 @@ import { Pool } from 'pg';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-const prisma = new PrismaClient({
+const basePrisma = new PrismaClient({
 	adapter: new PrismaPg(pool),
 });
+
+const prisma = basePrisma;
 
 export default prisma;

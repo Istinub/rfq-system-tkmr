@@ -9,6 +9,7 @@ import { rfqByTokenRouter } from './routes/rfq.byToken.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import adminRouter from './routes/admin.routes.js';
+import driveRouter from './routes/drive.routes.js';
 
 const app = express();
 const PORT = Number.parseInt(process.env.PORT ?? '', 10) || 5000;
@@ -105,6 +106,7 @@ app.use('/api/rfq/by-token', rfqByTokenRouter);
 app.use('/api/rfq', rfqRouter);
 app.use('/api/secure-link', secureLinkRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/drive', driveRouter);
 
 /**
  * ==============================
@@ -120,6 +122,7 @@ app.get('/', (_req: Request, res: Response) => {
       rfq: '/api/rfq',
       secureLink: '/api/secure-link',
       admin: '/api/admin',
+      drive: '/api/drive',
     },
   });
 });

@@ -35,7 +35,6 @@ const apiClient = axios.create({
   timeout: 15000,
 });
 
-apiClient.defaults.headers.common['Content-Type'] = 'application/json';
 apiClient.defaults.headers.common.Accept = 'application/json';
 
 // ======================================
@@ -95,6 +94,20 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (axios.isAxiosError(error)) {
+      const lowerMessage = (error.message || '').toLowerCase();
+      const isTimeout = error.code === 'ECONNABORTED' || lowerMessage.includes('timeout');
+      const isMultipartUpload = error.config?.url?.includes('/rfq/multipart');
+
+      if (isTimeout && isMultipartUpload) {
+        return Promise.reject(
+          new ApiError(
+            'Upload timed out. Your RFQ may still have been submitted. Please check the RFQ list and try again if needed.',
+            408,
+            error.response?.data
+          )
+        );
+      }
+
       const message = extractErrorMessage(error);
       return Promise.reject(
         new ApiError(message, error.response?.status, error.response?.data)
@@ -113,7 +126,7 @@ apiClient.interceptors.response.use(
 // Health Check (PROXY)
 // ======================================
 export const healthCheck = async (): Promise<HealthResponse> => {
-  const { data } = await apiClient.get<HealthResponse>('/health');
+  const { data } = await axios.get<HealthResponse>('/health');
   return data;
 };
 
@@ -125,7 +138,30 @@ export const healthCheck = async (): Promise<HealthResponse> => {
 export const createRFQ = async (
   rfq: RFQRequest
 ): Promise<CreateRFQResponse> => {
-  const { data } = await apiClient.post('/rfq', rfq);
+  const { data } = await apiClient.post('/rfq', rfq, {
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  const parsed = CreateRFQResponseSchema.safeParse(data);
+  if (!parsed.success) {
+    console.error(parsed.error);
+    throw new ApiError(
+      'Invalid RFQ response payload',
+      500,
+      parsed.error.flatten()
+    );
+  }
+
+  return parsed.data;
+};
+
+export const createRFQMultipart = async (
+  formData: FormData
+): Promise<CreateRFQResponse> => {
+  const { data } = await apiClient.post('/rfq/multipart', formData, {
+    headers: { 'Content-Type': undefined },
+    timeout: 30000,
+  });
 
   const parsed = CreateRFQResponseSchema.safeParse(data);
   if (!parsed.success) {

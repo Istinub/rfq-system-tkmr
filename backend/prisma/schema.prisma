@@ -17,6 +17,8 @@ datasource db {
 
 model RFQ {
   id           String       @id @default(cuid())
+  rfqNo        Int          @unique @default(autoincrement())
+  publicId     String?      @unique
   company      String
   contactName  String
   contactEmail String
@@ -45,6 +47,7 @@ model Attachment {
   fileName String
   fileUrl  String
   fileSize Int?
+  driveFileId String?
 
   rfq RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
 }

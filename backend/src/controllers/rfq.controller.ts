@@ -1,6 +1,10 @@
 import type { RequestHandler } from 'express';
 import { PrismaClient, Prisma } from '@prisma/client';
+import { randomUUID } from 'crypto';
+import { PassThrough } from 'stream';
 import prisma from '../lib/prisma.js';
+import { getDrive, getDriveRootFolderId } from '../lib/googleDrive.js';
+import { buildRfqFolderName, ensureFolder, storeRfqAttachmentsToDrive } from '../services/driveRfqStorage.service.js';
 
 type RFQItemInput = {
   name: string;
@@ -52,8 +56,26 @@ const serializeRFQ = (rfq: RFQWithRelations) => ({
     fileName: attachment.fileName,
     fileUrl: attachment.fileUrl,
     fileSize: attachment.fileSize ?? null,
+    driveFileId: attachment.driveFileId ?? null,
   })),
 });
+
+const retryPrismaP2028 = async <T>(fn: () => Promise<T>, attempts = 3, delayMs = 300): Promise<T> => {
+  let lastError: unknown;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2028' && i < attempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
+};
 
 const parseItems = (items: RFQItemInput[] | undefined): RFQItemInput[] => {
   if (!Array.isArray(items)) {
@@ -86,6 +108,19 @@ const parseAttachments = (attachments: AttachmentInput[] | undefined): Attachmen
     .filter((attachment) => Boolean(attachment.fileName) && Boolean(attachment.fileUrl)) as AttachmentInput[];
 };
 
+const getInitial = (value: string): string => {
+  const normalized = (value || '').trim();
+  const match = normalized.match(/[A-Za-z]/);
+  return match ? match[0].toUpperCase() : 'X';
+};
+
+const formatPublicId = (contactName: string, company: string, rfqNo: number): string => {
+  const contactInitial = getInitial(contactName);
+  const companyInitial = getInitial(company);
+  const sequence = Number.isFinite(rfqNo) ? rfqNo : 0;
+  return `${contactInitial}${companyInitial}-${sequence.toString().padStart(6, '0')}`;
+};
+
 export const createRFQ: RequestHandler = async (req, res) => {
   try {
     const { company, contactName, contactEmail, contactPhone, items, attachments } = req.body as CreateRFQBody;
@@ -103,7 +138,7 @@ export const createRFQ: RequestHandler = async (req, res) => {
 
     const attachmentPayload = parseAttachments(attachments);
 
-    const rfq = await prisma.$transaction(async (tx: PrismaClient) => {
+    const rfqRecord = await prisma.$transaction(async (tx: PrismaClient) => {
       const created = await tx.rFQ.create({
         data: {
           company: company.trim(),
@@ -124,22 +159,56 @@ export const createRFQ: RequestHandler = async (req, res) => {
         });
       }
 
-      if (attachmentPayload.length) {
-        await tx.attachment.createMany({
-          data: attachmentPayload.map((attachment: AttachmentInput) => ({
-            fileName: attachment.fileName,
-            fileUrl: attachment.fileUrl,
-            fileSize: attachment.fileSize,
-            rfqId: created.id,
-          })),
-        });
-      }
-
-      return tx.rFQ.findUniqueOrThrow({
+      const publicId = formatPublicId(created.contactName, created.company, created.rfqNo);
+      const updated = await tx.rFQ.update({
         where: { id: created.id },
-        include: rfqInclude,
+        data: { publicId },
       });
+
+      return updated;
     });
+
+    if (attachmentPayload.length) {
+      try {
+        const uploads = await storeRfqAttachmentsToDrive({
+          rfqId: rfqRecord.id,
+          company: rfqRecord.company,
+          createdAt: rfqRecord.createdAt,
+          rootFolderId: getDriveRootFolderId(),
+          attachments: attachmentPayload,
+          makePublic: process.env.DRIVE_PUBLIC_FILES === 'true',
+        });
+
+        if (uploads.uploaded.length) {
+          await prisma.attachment.createMany({
+            data: uploads.uploaded.map((file) => ({
+              fileName: file.fileName,
+              fileUrl: file.fileUrl,
+              fileSize: file.fileSize,
+              driveFileId: file.driveFileId,
+              rfqId: rfqRecord.id,
+            })),
+          });
+        }
+      } catch (driveError) {
+        console.error('Drive upload failed', driveError);
+        try {
+          await prisma.rFQ.delete({ where: { id: rfqRecord.id } });
+        } catch (cleanupError) {
+          console.error('Failed to rollback RFQ after Drive failure', cleanupError);
+        }
+        return res.status(500).json({ error: 'Drive upload failed' });
+      }
+    }
+
+    const rfq = await prisma.rFQ.findUnique({
+      where: { id: rfqRecord.id },
+      include: rfqInclude,
+    });
+
+    if (!rfq) {
+      return res.status(500).json({ error: 'RFQ could not be loaded after creation' });
+    }
 
     return res.status(201).json({ rfq: serializeRFQ(rfq) });
   } catch (error: unknown) {
@@ -210,5 +279,190 @@ export const deleteRFQ: RequestHandler = async (req, res) => {
     }
     console.error(error);
     return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const createRFQMultipart: RequestHandler = async (req, res) => {
+  try {
+    const { company, contactName, contactEmail, contactPhone } = req.body as Record<string, unknown>;
+    const rawItems = req.body?.items as string | undefined;
+
+    let parsedItemsInput: RFQItemInput[] = [];
+    if (rawItems) {
+      try {
+        const parsed = JSON.parse(rawItems);
+        if (!Array.isArray(parsed)) {
+          throw new Error('items must be an array');
+        }
+        parsedItemsInput = parsed as RFQItemInput[];
+      } catch (_parseError) {
+        return res.status(400).json({ error: 'Invalid items payload. Must be JSON array.' });
+      }
+    }
+
+    if (!company || !contactName || !contactEmail) {
+      return res.status(400).json({ error: 'company, contactName, and contactEmail are required' });
+    }
+
+    const itemPayload = parseItems(parsedItemsInput);
+    if (itemPayload.length === 0) {
+      return res.status(400).json({ error: 'At least one RFQ item is required' });
+    }
+
+    const files = (req.files as Express.Multer.File[]) || [];
+
+    let rfqRecord = await retryPrismaP2028(() =>
+      prisma.rFQ.create({
+        data: {
+          company: String(company).trim(),
+          contactName: String(contactName).trim(),
+          contactEmail: String(contactEmail).trim(),
+          contactPhone: typeof contactPhone === 'string' ? contactPhone.trim() : undefined,
+        },
+      })
+    );
+
+    const publicId = formatPublicId(rfqRecord.contactName, rfqRecord.company, rfqRecord.rfqNo);
+    rfqRecord = await retryPrismaP2028(() =>
+      prisma.rFQ.update({
+        where: { id: rfqRecord.id },
+        data: { publicId },
+      })
+    );
+
+    if (itemPayload.length) {
+      await retryPrismaP2028(() =>
+        prisma.rFQItem.createMany({
+          data: itemPayload.map((item: RFQItemInput) => ({
+            name: item.name,
+            quantity: item.quantity,
+            details: item.details,
+            rfqId: rfqRecord.id,
+          })),
+        })
+      );
+    }
+
+    let uploads: { fileName: string; fileUrl: string; fileSize?: number; driveFileId: string }[] = [];
+
+    if (files.length) {
+      const drive = getDrive();
+      const rootFolderId = getDriveRootFolderId();
+      const folderName = buildRfqFolderName(rfqRecord.id, rfqRecord.company, rfqRecord.createdAt);
+
+      try {
+        const folder = await ensureFolder(rootFolderId, folderName);
+
+        for (const file of files) {
+          const stream = new PassThrough();
+          stream.end(file.buffer);
+
+          const { data } = await drive.files.create({
+            requestBody: {
+              name: file.originalname,
+              parents: [folder.id],
+            },
+            media: {
+              mimeType: file.mimetype || 'application/octet-stream',
+              body: stream,
+            },
+            fields: 'id,name,mimeType,size,webViewLink,webContentLink',
+            supportsAllDrives: true,
+          });
+
+          if (!data.id) {
+            throw new Error('Drive upload failed');
+          }
+
+          const viewLink =
+            data.webViewLink ||
+            data.webContentLink ||
+            `https://drive.google.com/file/d/${data.id}/view`;
+
+          if (process.env.DRIVE_PUBLIC_FILES === 'true') {
+            try {
+              await drive.permissions.create({
+                fileId: data.id,
+                requestBody: { role: 'reader', type: 'anyone', allowFileDiscovery: false },
+                supportsAllDrives: true,
+              });
+            } catch (permissionError) {
+              const driveErr = permissionError as {
+                message?: string;
+                response?: { status?: number; data?: unknown };
+              };
+              console.error('[Drive permission failed]', {
+                fileId: data.id,
+                message:
+                  driveErr?.message ?? (permissionError instanceof Error ? permissionError.message : String(permissionError)),
+                responseStatus: driveErr?.response?.status,
+                responseData: driveErr?.response?.data,
+              });
+            }
+          }
+
+          const size = typeof data.size === 'string' ? Number(data.size) : file.size;
+
+          uploads.push({
+            fileName: data.name || file.originalname,
+            fileUrl: viewLink,
+            fileSize: Number.isFinite(size) ? size : undefined,
+            driveFileId: data.id,
+          });
+        }
+      } catch (uploadError) {
+        const errorId = randomUUID();
+        const driveError = uploadError as {
+          message?: string;
+          stack?: string;
+          code?: string;
+          errors?: unknown;
+          response?: { status?: number; data?: unknown };
+        };
+
+        console.error(`[Drive upload failed][${errorId}]`, {
+          errorId,
+          message:
+            driveError?.message ?? (uploadError instanceof Error ? uploadError.message : String(uploadError)),
+          code: driveError?.code,
+          responseStatus: driveError?.response?.status,
+          responseData: driveError?.response?.data,
+          errors: driveError?.errors,
+          stack: driveError?.stack ?? (uploadError instanceof Error ? uploadError.stack : undefined),
+        });
+
+        return res.status(502).json({ errorId, message: 'Drive upload failed' });
+      }
+    }
+
+    if (uploads.length) {
+      await retryPrismaP2028(() =>
+        prisma.attachment.createMany({
+          data: uploads.map((upload) => ({
+            fileName: upload.fileName,
+            fileUrl: upload.fileUrl,
+            fileSize: upload.fileSize,
+            driveFileId: upload.driveFileId,
+            rfqId: rfqRecord.id,
+          })),
+        })
+      );
+    }
+
+    const rfq = await retryPrismaP2028(() =>
+      prisma.rFQ.findUnique({
+        where: { id: rfqRecord.id },
+        include: rfqInclude,
+      })
+    );
+
+    if (!rfq) {
+      return res.status(500).json({ error: 'RFQ could not be loaded after creation' });
+    }
+
+    return res.status(201).json({ rfq: serializeRFQ(rfq) });
+  } catch (error) {
+    console.error(error);
+    throw error;
   }
 };

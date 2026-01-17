@@ -270,6 +270,74 @@ NODE_ENV=development
 FRONTEND_URL=http://localhost:9000
 ```
 
+## Google Drive Integration (Setup Guide)
+
+### 1. Purpose
+- Store RFQ attachment uploads in Google Drive.
+- All uploads are restricted to a single configured Drive folder.
+
+### 2. Google Cloud Console Setup
+1) Create a Google Cloud project.
+2) Enable the Google Drive API.
+3) Configure the OAuth Consent Screen (External; testing mode is fine) and add your Google account as a test user.
+4) Create an OAuth Client ID (Web application).
+5) Add authorized redirect URIs:
+	 - Local: `http://localhost:3000/oauth2callback`
+	 - GitHub Codespaces: `https://<codespace>-3000.app.github.dev/oauth2callback`
+
+### 3. Generate OAuth Refresh Token (One-Time Setup)
+- A refresh token is required for server-to-server access and is generated once per Google account.
+- Run the helper script from the `backend` directory:
+
+```bash
+node --env-file=.env scripts/generateDriveToken.js
+```
+
+- Approve access in the browser when prompted.
+- Example console output:
+
+```text
+Authorization complete
+REFRESH TOKEN (save in .env): 1//0gbil_TODFKOFCgYIARAAGBASNwF-L9...
+access_token: ya29.a0AfH6SMA...
+expiry_date: 1736275200000
+```
+
+- Copy the `REFRESH TOKEN` into your environment variables (see below).
+
+### 4. Environment Variables
+Set these in the `backend/.env` (local/Codespaces) or Render Environment Variables (production):
+
+- `DRIVE_CLIENT_ID`
+- `DRIVE_CLIENT_SECRET`
+- `DRIVE_REFRESH_TOKEN`
+- `DRIVE_FOLDER_ID` (the target folder where uploads are stored)
+
+Notes:
+- Do **not** commit these values to git.
+- `client_secret.json` remains local-only and should not be checked in.
+
+### 5. Verifying the Integration
+- Endpoint: `GET /api/drive/ping`
+- Successful response example:
+
+```json
+{
+	"ok": true,
+	"user": { "emailAddress": "your.email@gmail.com" },
+	"rootFolder": { "id": "1ml8K90mjw-84mm7ae5nRo954LzrtuShO", "name": "rfq-uploads" }
+}
+```
+
+Common failure cases:
+- `invalid_client` — check `DRIVE_CLIENT_ID/SECRET` and OAuth credentials.
+- `File not found` — the service account/user lacks access to `DRIVE_FOLDER_ID` or the ID is incorrect.
+
+### 6. Security Notes
+- `client_secret.json` is gitignored to keep OAuth secrets out of the repository.
+- Never commit or log refresh tokens; treat them like passwords.
+- Drive access is scoped to the authenticated Google account used during consent.
+
 ## 🚢 Production Build
 
 Build all packages for production:

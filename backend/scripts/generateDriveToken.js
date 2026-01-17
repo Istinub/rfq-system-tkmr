@@ -3,8 +3,8 @@ import fs from 'fs';
 import http from 'http';
 import { google } from 'googleapis';
 
-const REDIRECT_URI = process.env.DRIVE_OAUTH_REDIRECT_URI || 'http://localhost:3000/oauth2callback';
-const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
+const REDIRECT_URI = process.env.DRIVE_OAUTH_REDIRECT_URI || 'https://scaling-chainsaw-xpjqj5g9jvjfv49v-3000.app.github.dev/oauth2callback';
+const SCOPES = ['https://www.googleapis.com/auth/drive'];
 
 const credentialsPath = new URL('./client_secret.json', import.meta.url);
 const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
