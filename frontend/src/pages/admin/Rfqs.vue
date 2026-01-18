@@ -58,6 +58,12 @@
             </q-td>
           </template>
 
+          <template #body-cell-id="props">
+            <q-td :props="props">
+              {{ props.row.publicId }}
+            </q-td>
+          </template>
+
           <template #body-cell-actions="props">
             <q-td :props="props">
               <div class="row q-gutter-x-sm">
@@ -108,6 +114,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
+import type { QTableColumn } from 'quasar';
 import { useAdminRfqsStore } from '../../stores/admin/adminRfqs';
 import type { AdminRfqSummary } from '../../services/admin/types';
 
@@ -115,13 +122,13 @@ const router = useRouter();
 const rfqStore = useAdminRfqsStore();
 const { rfqs, loading, error } = storeToRefs(rfqStore);
 
-const columns = [
-  { name: 'id', label: 'ID', field: 'id', align: 'left', sortable: true },
+const columns: QTableColumn<AdminRfqSummary>[] = [
+  { name: 'publicId', label: 'ID', field: (row) => row.publicId ?? '—', align: 'left', sortable: true },
   { name: 'company', label: 'Company', field: 'company', align: 'left', sortable: true },
   { name: 'contact', label: 'Contact', field: 'contactName', align: 'left' },
   { name: 'createdAt', label: 'Created', field: 'createdAt', align: 'left', sortable: true },
   { name: 'tokenStatus', label: 'Token Status', field: 'tokenStatus', align: 'left' },
-  { name: 'actions', label: 'Actions', field: 'actions', align: 'right' },
+  { name: 'actions', label: 'Actions', field: 'id', align: 'right' },
 ];
 
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -137,7 +144,7 @@ const filteredRfqs = computed(() => {
   const term = search.value.trim().toLowerCase();
   if (!term) return rfqs.value;
   return rfqs.value.filter((rfq) => {
-    return [rfq.id, rfq.company, rfq.contactName, rfq.tokenStatus]
+    return [rfq.publicId ?? '', rfq.id, rfq.company, rfq.contactName, rfq.tokenStatus]
       .filter(Boolean)
       .some((field) => String(field).toLowerCase().includes(term));
   });

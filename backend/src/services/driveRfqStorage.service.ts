@@ -10,15 +10,15 @@ export const sanitizeFolderName = (input: string): string => {
   return limited || 'folder';
 };
 
-export const buildRfqFolderName = (rfqId: string, company: string, createdAt: Date): string => {
-  const dateStr = createdAt.toISOString().slice(0, 10);
+export const buildRfqFolderName = (
+  company: string,
+  createdAt: Date,
+  publicId?: string | null
+): string => {
   const sanitizedCompany = sanitizeFolderName(company || 'company');
-  const prefix = `RFQ_${rfqId}_`;
-  const suffix = `_${dateStr}`;
-  const maxCompanyLength = Math.max(1, 120 - (prefix.length + suffix.length));
-  const finalCompany = sanitizedCompany.slice(0, maxCompanyLength);
-  const full = `${prefix}${finalCompany}${suffix}`;
-  return full.slice(0, 120);
+  const displayId = (publicId && publicId.trim());
+  const folderName = `${displayId}__${sanitizedCompany}`;
+  return folderName.slice(0, 120);
 };
 
 export const ensureFolder = async (
@@ -148,14 +148,15 @@ export const storeRfqAttachmentsToDrive = async (
     rootFolderId: string;
     attachments: Array<{ fileName: string; fileUrl: string; fileSize?: number }>;
     makePublic?: boolean;
+    publicId?: string | null;
   },
 ): Promise<{
   folderId: string;
   uploaded: Array<{ fileName: string; fileUrl: string; fileSize?: number; driveFileId: string }>;
 }> => {
-  const { rfqId, company, createdAt, rootFolderId, attachments, makePublic } = args;
+  const { rfqId, company, createdAt, rootFolderId, attachments, makePublic, publicId } = args;
 
-  const folderName = buildRfqFolderName(rfqId, company, createdAt);
+  const folderName = buildRfqFolderName(company, createdAt, publicId);
   if (!attachments.length) {
     return { folderId: rootFolderId, uploaded: [] };
   }

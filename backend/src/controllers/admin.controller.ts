@@ -55,6 +55,8 @@ const serializeRfqSummary = (
   const [latestLink] = rfq.secureLinks;
   return {
     id: rfq.id,
+    publicId: rfq.publicId ?? null,
+    rfqNo: rfq.rfqNo,
     company: rfq.company,
     contactName: rfq.contactName,
     contactEmail: rfq.contactEmail,
@@ -70,6 +72,8 @@ const serializeRfqDetails = (
 
   return {
     id: rfq.id,
+    publicId: rfq.publicId ?? null,
+    rfqNo: rfq.rfqNo,
     company: rfq.company,
     contactName: rfq.contactName,
     contactEmail: rfq.contactEmail,

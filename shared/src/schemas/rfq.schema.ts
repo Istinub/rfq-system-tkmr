@@ -28,6 +28,8 @@ const RFQRequestAttachmentSchema = z.object({
 
 export const RFQSchema = z.object({
   id: z.string().min(1, 'RFQ id is required'),
+  publicId: z.string().min(1, 'RFQ public id is required').nullable().optional(),
+  rfqNo: z.number().int().nonnegative().optional(),
   company: z.string().min(1, 'Company is required'),
   contactName: z.string().min(1, 'Contact name is required'),
   contactEmail: z.string().email('Contact email must be valid'),

@@ -308,12 +308,13 @@ const handleSubmit = async () => {
 
   try {
     const formData = buildMultipartPayload();
-    const { rfq: { id } } = await createRFQMultipart(formData);
+    const { rfq } = await createRFQMultipart(formData);
+    const rfqIdentifier = rfq.publicId;
 
 
     $q.notify({
       type: 'positive',
-      message: `RFQ ${id} submitted successfully.`,
+      message: `${rfqIdentifier} submitted successfully.`,
       position: 'top',
     });
 

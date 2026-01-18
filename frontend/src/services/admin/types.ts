@@ -21,6 +21,8 @@ export interface AdminStatsResponse {
 
 export interface AdminRfqSummary {
   id: string;
+  publicId?: string | null;
+  rfqNo?: number;
   company: string;
   contactName: string;
   contactEmail: string;

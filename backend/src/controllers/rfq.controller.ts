@@ -40,6 +40,8 @@ const ensureIdParam = (value: string | undefined) => value?.trim() ?? '';
 
 const serializeRFQ = (rfq: RFQWithRelations) => ({
   id: rfq.id,
+  publicId: rfq.publicId ?? null,
+  rfqNo: rfq.rfqNo,
   company: rfq.company,
   contactName: rfq.contactName,
   contactEmail: rfq.contactEmail,
@@ -108,17 +110,12 @@ const parseAttachments = (attachments: AttachmentInput[] | undefined): Attachmen
     .filter((attachment) => Boolean(attachment.fileName) && Boolean(attachment.fileUrl)) as AttachmentInput[];
 };
 
-const getInitial = (value: string): string => {
-  const normalized = (value || '').trim();
-  const match = normalized.match(/[A-Za-z]/);
-  return match ? match[0].toUpperCase() : 'X';
-};
-
-const formatPublicId = (contactName: string, company: string, rfqNo: number): string => {
-  const contactInitial = getInitial(contactName);
-  const companyInitial = getInitial(company);
+const formatPublicId = (createdAt: Date, rfqNo: number): string => {
+  const year = createdAt instanceof Date && !Number.isNaN(createdAt.getTime())
+    ? createdAt.getFullYear()
+    : new Date().getFullYear();
   const sequence = Number.isFinite(rfqNo) ? rfqNo : 0;
-  return `${contactInitial}${companyInitial}-${sequence.toString().padStart(6, '0')}`;
+  return `RFQ-${year}-${sequence.toString().padStart(6, '0')}`;
 };
 
 export const createRFQ: RequestHandler = async (req, res) => {
@@ -159,7 +156,7 @@ export const createRFQ: RequestHandler = async (req, res) => {
         });
       }
 
-      const publicId = formatPublicId(created.contactName, created.company, created.rfqNo);
+      const publicId = formatPublicId(created.createdAt, created.rfqNo);
       const updated = await tx.rFQ.update({
         where: { id: created.id },
         data: { publicId },
@@ -177,6 +174,7 @@ export const createRFQ: RequestHandler = async (req, res) => {
           rootFolderId: getDriveRootFolderId(),
           attachments: attachmentPayload,
           makePublic: process.env.DRIVE_PUBLIC_FILES === 'true',
+          publicId: rfqRecord.publicId,
         });
 
         if (uploads.uploaded.length) {
@@ -322,7 +320,7 @@ export const createRFQMultipart: RequestHandler = async (req, res) => {
       })
     );
 
-    const publicId = formatPublicId(rfqRecord.contactName, rfqRecord.company, rfqRecord.rfqNo);
+    const publicId = formatPublicId(rfqRecord.createdAt, rfqRecord.rfqNo);
     rfqRecord = await retryPrismaP2028(() =>
       prisma.rFQ.update({
         where: { id: rfqRecord.id },
@@ -348,7 +346,11 @@ export const createRFQMultipart: RequestHandler = async (req, res) => {
     if (files.length) {
       const drive = getDrive();
       const rootFolderId = getDriveRootFolderId();
-      const folderName = buildRfqFolderName(rfqRecord.id, rfqRecord.company, rfqRecord.createdAt);
+      const folderName = buildRfqFolderName(
+        rfqRecord.company,
+        rfqRecord.createdAt,
+        rfqRecord.publicId
+      );
 
       try {
         const folder = await ensureFolder(rootFolderId, folderName);
