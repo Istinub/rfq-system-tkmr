@@ -5,7 +5,7 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "prebuild": "npm run build --workspace=@rfq-system/shared",
+    "prebuild": "prisma generate && npm run build --workspace=@rfq-system/shared",
     "build": "tsc -p tsconfig.build.json",
     "postbuild": "node ./scripts/copy-prisma.js",
     "postinstall": "prisma generate",

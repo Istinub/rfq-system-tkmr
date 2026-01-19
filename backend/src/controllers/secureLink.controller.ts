@@ -48,7 +48,7 @@ const getUserAgent = (req: Parameters<RequestHandler>[0]): string | undefined =>
   return typeof ua === 'string' ? ua : Array.isArray(ua) ? ua[0] : undefined;
 };
 
-type AccessLogResult = Prisma.AccessResult | 'invalid';
+type AccessLogResult = 'success' | 'expired' | 'disabled' | 'invalid';
 
 const sanitizeHex = (value: string) => value.replace(/[^0-9a-f]/gi, '');
 
