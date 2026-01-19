@@ -302,10 +302,10 @@ const copySecureLink = async () => {
 };
 
 const handleRegenerate = async () => {
-  if (!rfq.value) return;
+  if (!secureLink.value) return;
   actionLoading.value = true;
   try {
-    await rfqStore.regenerateSecureLink(rfq.value.id);
+    await rfqStore.regenerateSecureLink(secureLink.value.id);
     await loadDetails();
   } finally {
     actionLoading.value = false;
@@ -316,7 +316,7 @@ const handleDisable = async () => {
   if (!secureLink.value) return;
   actionLoading.value = true;
   try {
-    await rfqStore.disableSecureLink(secureLink.value.token);
+    await rfqStore.disableSecureLink(secureLink.value.id);
     await loadDetails();
   } finally {
     actionLoading.value = false;

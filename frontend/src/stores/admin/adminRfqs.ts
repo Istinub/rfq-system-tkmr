@@ -56,9 +56,9 @@ export const useAdminRfqsStore = defineStore('adminRfqs', () => {
     }
   };
 
-  const regenerateSecureLink = async (rfqId: string | number) => {
+  const regenerateSecureLink = async (tokenId: string | number) => {
     try {
-      await regenerateToken(rfqId);
+      await regenerateToken(tokenId);
       Notify.create({ type: 'positive', message: 'Secure link regenerated.' });
     } catch (err) {
       handleAdminError(err, 'Failed to regenerate token');
@@ -66,9 +66,9 @@ export const useAdminRfqsStore = defineStore('adminRfqs', () => {
     }
   };
 
-  const disableSecureLink = async (token: string) => {
+  const disableSecureLink = async (tokenId: string | number) => {
     try {
-      await disableToken(token);
+      await disableToken(tokenId);
       Notify.create({ type: 'warning', message: 'Secure link disabled.' });
     } catch (err) {
       handleAdminError(err, 'Failed to disable token');

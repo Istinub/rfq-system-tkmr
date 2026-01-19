@@ -158,15 +158,17 @@ const resultOptions = [
   { label: 'Success', value: 'success' },
   { label: 'Expired', value: 'expired' },
   { label: 'Disabled', value: 'disabled' },
+  { label: 'Invalid', value: 'invalid' },
 ];
 
 const resultConfig: Record<AdminLogResult, { label: string; color: string; rowClass: string }> = {
   success: { label: 'Success', color: 'positive', rowClass: 'row-success' },
   expired: { label: 'Expired', color: 'orange', rowClass: 'row-expired' },
   disabled: { label: 'Disabled', color: 'negative', rowClass: 'row-disabled' },
+  invalid: { label: 'Invalid', color: 'grey-6', rowClass: 'row-invalid' },
 };
 
-const getResultMeta = (result: string) => resultConfig[result as AdminLogResult] ?? resultConfig.success;
+const getResultMeta = (result: AdminLogResult) => resultConfig[result] ?? resultConfig.success;
 
 const resultFilter = ref(filters.value.result ?? 'all');
 const searchTerm = ref(filters.value.search ?? '');
@@ -266,6 +268,10 @@ onMounted(() => {
 
 .logs-table :deep(.row-disabled) {
   background: rgba(244, 67, 54, 0.1);
+}
+
+.logs-table :deep(.row-invalid) {
+  background: rgba(158, 158, 158, 0.12);
 }
 
 .font-mono {

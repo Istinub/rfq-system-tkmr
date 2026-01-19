@@ -64,15 +64,17 @@ export interface AdminRfqDetails extends AdminRfqSummary {
 
 export interface AdminTokenRow {
   id: string;
-  token: string;
+  tokenHash: string;
+  tokenPreview: string;
   rfqId: string;
+  rfqPublicId?: string | null;
   createdAt: string;
   expiresAt: string;
   usageCount: number;
   status: TokenStatus;
 }
 
-export type AdminLogResult = 'success' | 'expired' | 'disabled';
+export type AdminLogResult = 'success' | 'expired' | 'disabled' | 'invalid';
 
 export interface AdminLogEntry {
   id: string;

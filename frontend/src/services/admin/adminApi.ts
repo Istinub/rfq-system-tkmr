@@ -59,9 +59,10 @@ export const getRfqs = () => unwrap<AdminRfqSummary[]>(adminApiClient.get('/rfqs
 export const getRfq = (id: string | number) => unwrap<AdminRfqDetails>(adminApiClient.get(`/rfqs/${id}`));
 export const deleteRfq = (id: string | number) => unwrap<void>(adminApiClient.delete(`/rfqs/${id}`));
 export const getTokens = () => unwrap<AdminTokenRow[]>(adminApiClient.get('/tokens'));
-export const disableToken = (token: string) =>
-  unwrap<void>(secureLinkApiClient.post(`/secure-link/invalidate/${encodeURIComponent(token)}`));
-export const regenerateToken = (rfqId: string | number) => unwrap<void>(secureLinkApiClient.post(`/secure-link/${rfqId}`));
+export const disableToken = (tokenId: string | number) =>
+  unwrap<AdminTokenRow>(adminApiClient.post(`/tokens/${tokenId}/disable`));
+export const regenerateToken = (tokenId: string | number) =>
+  unwrap<AdminTokenRow>(adminApiClient.post(`/tokens/${tokenId}/regenerate`));
 export const getLogs = (params?: Record<string, unknown>) => unwrap<AdminLogEntry[]>(adminApiClient.get('/logs', { params }));
 export const getSettings = () => unwrap<AdminSettings>(adminApiClient.get('/settings'));
 export const updateSettings = (payload: AdminSettings) => unwrap<AdminSettings>(adminApiClient.post('/settings', payload));

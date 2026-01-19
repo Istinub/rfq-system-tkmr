@@ -31,6 +31,61 @@ const getRfqIdFromRequest = (req: Parameters<RequestHandler>[0]): string => {
 
 const ensureToken = (token: string | undefined): string => token?.trim() ?? '';
 
+const getClientIp = (req: Parameters<RequestHandler>[0]): string => {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.trim()) {
+    return forwarded.split(',')[0]?.trim() || forwarded.trim();
+  }
+  if (Array.isArray(forwarded) && forwarded.length) {
+    return forwarded[0].trim();
+  }
+
+  return req.socket?.remoteAddress ?? req.ip ?? '';
+};
+
+const getUserAgent = (req: Parameters<RequestHandler>[0]): string | undefined => {
+  const ua = req.headers['user-agent'];
+  return typeof ua === 'string' ? ua : Array.isArray(ua) ? ua[0] : undefined;
+};
+
+type AccessLogResult = Prisma.AccessResult | 'invalid';
+
+const sanitizeHex = (value: string) => value.replace(/[^0-9a-f]/gi, '');
+
+const hashTokenPrefix = (token: string, prefixLength = 16): string => {
+  const clean = token.trim();
+  if (!clean) return '';
+  const hash = crypto.createHash('sha256').update(clean).digest('hex');
+  return sanitizeHex(hash).slice(0, prefixLength);
+};
+
+const logAccessAttempt = async (
+  payload: {
+    secureLinkId?: string;
+    rfqId?: string;
+    tokenHashPrefix: string;
+    result: AccessLogResult;
+    ip?: string;
+    userAgent?: string;
+  }
+) => {
+  try {
+    const tokenValue = payload.tokenHashPrefix || 'unknown';
+    await prismaClient.secureLinkAccessLog.create({
+      data: {
+        secureLinkId: payload.secureLinkId,
+        rfqId: payload.rfqId,
+        token: tokenValue,
+        result: payload.result,
+        ip: payload.ip,
+        userAgent: payload.userAgent,
+      },
+    });
+  } catch (error) {
+    console.error('Failed to log secure link access', error);
+  }
+};
+
 const serializeRfq = (rfq: SecureLinkRFQ) => ({
   id: rfq.id,
   company: rfq.company,
@@ -118,8 +173,20 @@ export const generateSecureLink: RequestHandler = async (req, res) => {
 
 export const resolveSecureLinkByToken: RequestHandler = async (req, res) => {
   const token = ensureToken(req.params.token);
+  const tokenHashPrefix = hashTokenPrefix(token);
+  let result: AccessLogResult = 'invalid';
+  let secureLinkId: string | undefined;
+  let rfqId: string | undefined;
 
   if (!token) {
+    await logAccessAttempt({
+      secureLinkId,
+      rfqId,
+      tokenHashPrefix,
+      result,
+      ip: getClientIp(req),
+      userAgent: getUserAgent(req),
+    });
     return res.status(400).json(SECURE_TOKEN_REQUIRED_ERROR);
   }
 
@@ -130,14 +197,25 @@ export const resolveSecureLinkByToken: RequestHandler = async (req, res) => {
     });
 
     if (!secureLink) {
+      result = 'invalid';
       return res.status(404).json(INVALID_OR_EXPIRED_ERROR);
     }
 
+    secureLinkId = secureLink.id;
+    rfqId = secureLink.rfqId;
+
+    if (secureLink.disabled) {
+      result = 'disabled';
+      return respondWithInvalidToken(res, 410);
+    }
+
     if (secureLink.expiresAt <= new Date()) {
+      result = 'expired';
       return respondWithInvalidToken(res, 410);
     }
 
     if (secureLink.oneTime && secureLink.firstAccessAt) {
+      result = 'disabled';
       return respondWithInvalidToken(res, 410);
     }
 
@@ -147,11 +225,13 @@ export const resolveSecureLinkByToken: RequestHandler = async (req, res) => {
       where: { id: secureLink.id },
       data: {
         firstAccessAt,
-        lastAccessIP: req.ip,
+        lastAccessIP: getClientIp(req),
         accessCount: { increment: 1 },
       },
       include: secureLinkInclude,
     });
+
+    result = 'success';
 
     return res.json({
       rfq: serializeRfq(updatedSecureLink.rfq),
@@ -160,6 +240,19 @@ export const resolveSecureLinkByToken: RequestHandler = async (req, res) => {
   } catch (error: unknown) {
     console.error(error);
     return res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    try {
+      await logAccessAttempt({
+        secureLinkId,
+        rfqId,
+        tokenHashPrefix,
+        result,
+        ip: getClientIp(req),
+        userAgent: getUserAgent(req),
+      });
+    } catch {
+      // swallow logging failures
+    }
   }
 };
 

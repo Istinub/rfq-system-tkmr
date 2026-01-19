@@ -57,54 +57,16 @@
           <template #body-cell-token="props">
             <q-td :props="props">
               <div class="row items-center q-gutter-sm">
-                <span class="font-mono">{{ maskToken(props.row.token) }}</span>
+                <span class="font-mono">{{ maskToken(props.row.tokenPreview) }}</span>
                 <q-btn
                   dense
                   flat
                   round
                   icon="content_copy"
-                  @click.stop="copyToken(props.row.token)"
+                  @click.stop="copyToken(props.row.tokenHash)"
                 />
-                <q-tooltip anchor="top middle">{{ props.row.token }}</q-tooltip>
-        .header-bar {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 16px;
-          align-items: flex-start;
-        }
-
-        .header-copy {
-          flex: 1 1 260px;
-        }
-
-        .filter-panel {
-          flex: 0 0 auto;
-          min-width: 240px;
-          padding: 12px;
-          border-radius: 12px;
-          border: 1px solid rgba(145, 158, 171, 0.3);
-          background: rgba(145, 158, 171, 0.08);
-        }
-
-        .filter-chip-group {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-
-        .filter-chip {
-          min-width: 80px;
-          justify-content: center;
-        }
-
+                <q-tooltip anchor="top middle">{{ sanitizeToken(props.row.tokenHash) }}</q-tooltip>
               </div>
-          .filter-panel {
-            width: 100%;
-          }
-
-          .filter-chip {
-            flex: 1 1 45%;
-          }
             </q-td>
           </template>
 
@@ -177,8 +139,13 @@ const filterOptions = [
 ];
 
 const columns = [
-  { name: 'token', label: 'Token', field: 'token', align: 'left' as const },
-  { name: 'rfqId', label: 'RFQ ID', field: 'rfqId', align: 'left' as const },
+  { name: 'token', label: 'Token Hash', field: 'tokenPreview', align: 'left' as const },
+  {
+    name: 'rfqId',
+    label: 'RFQ ID',
+    field: (row: AdminTokenRow) => row.rfqPublicId ?? row.rfqId,
+    align: 'left' as const,
+  },
   { name: 'createdAt', label: 'Created', field: 'createdAt', align: 'left' as const },
   { name: 'expiresAt', label: 'Expires', field: 'expiresAt', align: 'left' as const },
   { name: 'status', label: 'Status', field: 'status', align: 'left' as const },
@@ -205,21 +172,27 @@ const filteredTokens = computed(() => {
 
 const isInitialLoading = computed(() => loading.value && tokens.value.length === 0);
 
+const sanitizeToken = (value?: string) => (value ?? '').replace(/\s+/g, '').replace(/[^0-9a-f]/gi, '');
+
 const formatDate = (value?: string) => {
   if (!value) return '—';
   return new Date(value).toLocaleString();
 };
 
 const maskToken = (token: string) => {
-  if (token.length <= 8) {
-    return `${token.slice(0, 3)}••${token.slice(-2)}`;
+  const clean = sanitizeToken(token);
+  if (!clean) return '—';
+  if (clean.length <= 8) {
+    return `${clean.slice(0, 3)}••${clean.slice(-2)}`;
   }
-  return `${token.slice(0, 4)}••••${token.slice(-4)}`;
+  return `${clean.slice(0, 4)}••••${clean.slice(-4)}`;
 };
 
 const copyToken = async (token: string) => {
   try {
-    await navigator.clipboard.writeText(token);
+    const clean = sanitizeToken(token);
+    if (!clean) return;
+    await navigator.clipboard.writeText(clean);
   } catch {
     // ignore copy errors silently
   }
@@ -245,10 +218,10 @@ const withActionLoading = async (row: AdminTokenRow, type: 'disable' | 'regenera
 };
 
 const disableToken = (row: AdminTokenRow) =>
-  withActionLoading(row, 'disable', () => tokenStore.disable(row.token));
+  withActionLoading(row, 'disable', () => tokenStore.disable(row.id));
 
 const regenerateSecureToken = (row: AdminTokenRow) =>
-  withActionLoading(row, 'regenerate', () => tokenStore.regenerate(row.rfqId));
+  withActionLoading(row, 'regenerate', () => tokenStore.regenerate(row.id));
 
 onMounted(() => {
   if (!tokens.value.length) {
@@ -280,5 +253,46 @@ onMounted(() => {
 
 .font-mono {
   font-family: 'Roboto Mono', monospace;
+}
+
+.header-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.header-copy {
+  flex: 1 1 260px;
+}
+
+.filter-panel {
+  flex: 0 0 auto;
+  min-width: 240px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(145, 158, 171, 0.3);
+  background: rgba(145, 158, 171, 0.08);
+}
+
+.filter-chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-chip {
+  min-width: 80px;
+  justify-content: center;
+}
+
+@media (max-width: 640px) {
+  .filter-panel {
+    width: 100%;
+  }
+
+  .filter-chip {
+    flex: 1 1 45%;
+  }
 }
 </style>

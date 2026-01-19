@@ -25,16 +25,33 @@ const resolveTokenStatus = (link?: SecureLink | null): TokenStatus => {
   return link.expiresAt > nowUtc() ? 'active' : 'expired';
 };
 
-const serializeToken = (link: SecureLink) => ({
-  id: link.id,
-  token: link.token,
-  rfqId: link.rfqId,
-  createdAt: link.createdAt.toISOString(),
-  expiresAt: link.expiresAt.toISOString(),
-  usageCount: link.accessCount,
-  status: resolveTokenStatus(link),
-  disabled: link.disabled,
-});
+const sanitizeHex = (value: string) => value.replace(/[^0-9a-f]/gi, '');
+
+const buildTokenHash = (token: string) => sanitizeHex(crypto.createHash('sha256').update(token).digest('hex'));
+
+const buildTokenPreview = (tokenHash: string) => {
+  const clean = sanitizeHex(tokenHash);
+  if (clean.length <= 12) {
+    return clean;
+  }
+  return `${clean.slice(0, 8)}…${clean.slice(-8)}`;
+};
+
+const serializeToken = (link: SecureLink & { rfq?: { publicId: string | null } | null }) => {
+  const tokenHash = buildTokenHash(link.token);
+  return {
+    id: link.id,
+    tokenHash,
+    tokenPreview: buildTokenPreview(tokenHash),
+    rfqId: link.rfqId,
+    rfqPublicId: link.rfq?.publicId ?? null,
+    createdAt: link.createdAt.toISOString(),
+    expiresAt: link.expiresAt.toISOString(),
+    usageCount: link.accessCount,
+    status: resolveTokenStatus(link),
+    disabled: link.disabled,
+  };
+};
 
 const latestSecureLinkInclude = {
   secureLinks: {
@@ -224,7 +241,10 @@ export const deleteAdminRfq: RequestHandler = async (req, res) => {
 
 export const listAdminTokens: RequestHandler = async (_req, res) => {
   try {
-    const tokens = await prisma.secureLink.findMany({ orderBy: { createdAt: 'desc' } });
+    const tokens = await prisma.secureLink.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: { rfq: { select: { publicId: true } } },
+    });
     return res.json(tokens.map(serializeToken));
   } catch (error) {
     return handleError(res, error);
@@ -321,7 +341,12 @@ const parseLogFilters = (req: Parameters<RequestHandler>[0]): Prisma.SecureLinkA
     } as Prisma.DateTimeFilter;
   }
 
-  const allowedResults: SecureLinkAccessLog['result'][] = ['success', 'expired', 'disabled'];
+  const allowedResults: Array<SecureLinkAccessLog['result'] | 'invalid'> = [
+    'success',
+    'expired',
+    'disabled',
+    'invalid',
+  ];
   if (typeof result === 'string' && allowedResults.includes(result as SecureLinkAccessLog['result'])) {
     where.result = result as SecureLinkAccessLog['result'];
   }

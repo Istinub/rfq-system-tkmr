@@ -10,11 +10,26 @@ export const useAdminTokensStore = defineStore('adminTokens', () => {
   const loading = ref(false);
   const error = ref<string | null>(null);
 
+  const sanitizeHex = (value: string) => value.replace(/[^0-9a-f]/gi, '');
+
+  const sanitizeTokenRow = (row: AdminTokenRow): AdminTokenRow => {
+    const tokenHash = sanitizeHex(row.tokenHash ?? '');
+    const tokenPreview = sanitizeHex(row.tokenPreview ?? tokenHash).slice(0, 128);
+
+    return {
+      ...row,
+      tokenHash,
+      tokenPreview,
+      rfqPublicId: row.rfqPublicId ?? null,
+    };
+  };
+
   const refresh = async () => {
     loading.value = true;
     error.value = null;
     try {
-      tokens.value = await getTokens();
+      const response = await getTokens();
+      tokens.value = response.map(sanitizeTokenRow);
     } catch (err) {
       error.value = handleAdminError(err, 'Failed to load tokens');
     } finally {
@@ -22,9 +37,9 @@ export const useAdminTokensStore = defineStore('adminTokens', () => {
     }
   };
 
-  const disable = async (token: string) => {
+  const disable = async (tokenId: string | number) => {
     try {
-      await disableToken(token);
+      await disableToken(tokenId);
       Notify.create({ type: 'positive', message: 'Token disabled.' });
       await refresh();
     } catch (err) {
@@ -32,9 +47,9 @@ export const useAdminTokensStore = defineStore('adminTokens', () => {
     }
   };
 
-  const regenerate = async (rfqId: string | number) => {
+  const regenerate = async (tokenId: string | number) => {
     try {
-      await regenerateToken(rfqId);
+      await regenerateToken(tokenId);
       Notify.create({ type: 'positive', message: 'Token regenerated.' });
       await refresh();
     } catch (err) {
