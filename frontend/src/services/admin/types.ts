@@ -83,6 +83,7 @@ export interface AdminLogEntry {
   userAgent: string;
   token: string;
   rfqId?: string | null;
+  rfqPublicId?: string | null;
   result: AdminLogResult;
 }
 

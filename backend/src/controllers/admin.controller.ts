@@ -373,6 +373,7 @@ export const listAdminLogs: RequestHandler = async (req, res) => {
       orderBy: { createdAt: 'desc' },
       skip: offset,
       take: Math.min(limit, 250),
+      include: { rfq: { select: { publicId: true } } },
     });
 
     return res.json(
@@ -383,6 +384,7 @@ export const listAdminLogs: RequestHandler = async (req, res) => {
         userAgent: log.userAgent ?? null,
         token: log.token,
         rfqId: log.rfqId,
+        rfqPublicId: log.rfq?.publicId ?? null,
         result: log.result,
       }))
     );

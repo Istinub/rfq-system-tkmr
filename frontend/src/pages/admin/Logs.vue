@@ -148,7 +148,12 @@ const columns = [
   { name: 'timestamp', label: 'Timestamp', field: 'timestamp', align: 'left' as const },
   { name: 'ip', label: 'IP Address', field: 'ip', align: 'left' as const },
   { name: 'userAgent', label: 'User Agent', field: 'userAgent', align: 'left' as const },
-  { name: 'rfqId', label: 'RFQ ID', field: 'rfqId', align: 'left' as const },
+  {
+    name: 'rfqId',
+    label: 'RFQ ID',
+    field: (row: AdminLogEntry) => row.rfqPublicId ?? row.rfqId ?? '—',
+    align: 'left' as const,
+  },
   { name: 'token', label: 'Token', field: 'token', align: 'left' as const },
   { name: 'result', label: 'Result', field: 'result', align: 'left' as const },
 ];
