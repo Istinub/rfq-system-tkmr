@@ -8,6 +8,10 @@ import type {
   AdminSettings,
   AdminStatsResponse,
   AdminTokenRow,
+  AdminSubmissionToken,
+  AdminSubmissionTokenCreateRequest,
+  AdminSubmissionTokenCreateResponse,
+  AdminSubmissionTokenUpdateRequest,
 } from './types';
 
 export const ADMIN_API_KEY_STORAGE_KEY = 'ADMIN_API_KEY';
@@ -54,6 +58,24 @@ const unwrap = async <T>(promise: Promise<AxiosResponse<T>>): Promise<T> => {
   return data;
 };
 
+const normalizeSubmissionTokens = (data: unknown): AdminSubmissionToken[] => {
+  if (Array.isArray(data)) return data as AdminSubmissionToken[];
+
+  if (data && typeof data === 'object') {
+    const candidate = data as Record<string, unknown>;
+    const maybeArrays = ['tokens', 'data', 'items'] as const;
+
+    for (const key of maybeArrays) {
+      const value = candidate[key];
+      if (Array.isArray(value)) {
+        return value as AdminSubmissionToken[];
+      }
+    }
+  }
+
+  throw new Error('Invalid submission tokens response shape');
+};
+
 export const getStats = () => unwrap<AdminStatsResponse>(adminApiClient.get('/stats'));
 export const getRfqs = () => unwrap<AdminRfqSummary[]>(adminApiClient.get('/rfqs'));
 export const getRfq = (id: string | number) => unwrap<AdminRfqDetails>(adminApiClient.get(`/rfqs/${id}`));
@@ -68,3 +90,20 @@ export const getSettings = () => unwrap<AdminSettings>(adminApiClient.get('/sett
 export const updateSettings = (payload: AdminSettings) => unwrap<AdminSettings>(adminApiClient.post('/settings', payload));
 export const generateSecureLink = (rfqId: string | number) =>
   unwrap<{ secureLink: AdminSecureLinkMeta }>(secureLinkApiClient.post(`/secure-link/${rfqId}`));
+
+export const listSubmissionTokens = async () => {
+  const { data } = await adminApiClient.get<unknown>('/submission-tokens');
+  return normalizeSubmissionTokens(data);
+};
+
+export const createSubmissionToken = (payload: AdminSubmissionTokenCreateRequest) =>
+  unwrap<AdminSubmissionTokenCreateResponse>(adminApiClient.post('/submission-tokens', payload));
+
+export const updateSubmissionToken = (id: string, payload: AdminSubmissionTokenUpdateRequest) =>
+  unwrap<AdminSubmissionToken>(adminApiClient.patch(`/submission-tokens/${id}`, payload));
+
+export const revokeSubmissionToken = (id: string) =>
+  unwrap<AdminSubmissionToken>(adminApiClient.post(`/submission-tokens/${id}/revoke`));
+
+export const deleteSubmissionToken = (id: string) =>
+  unwrap<void>(adminApiClient.delete(`/submission-tokens/${id}`));

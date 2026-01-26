@@ -45,6 +45,26 @@
                   <div class="text-caption text-grey-5">{{ rfq.contactPhone || 'No phone provided' }}</div>
                 </div>
               </q-card-section>
+              <q-separator />
+              <q-card-section>
+                <div class="text-caption text-grey-6">Submitted By</div>
+                <div class="row items-center q-col-gutter-sm q-mt-xs">
+                  <q-badge :color="rfq.submittedByType === 'TOKEN' ? 'secondary' : 'primary'" outline>
+                    {{ rfq.submittedByType || 'ADMIN' }}
+                  </q-badge>
+                  <div v-if="rfq.submittedByType === 'TOKEN'" class="text-body2 font-mono">
+                    {{ tokenPreview(rfq.submittedByTokenId) }}
+                  </div>
+                </div>
+                <div
+                  v-if="rfq.submittedByType === 'TOKEN' && rfq.submittedByToken"
+                  class="text-caption text-grey-6 q-mt-sm column q-gutter-xs"
+                >
+                  <div>Expires: {{ formatDate(rfq.submittedByToken.expiresAt) }}</div>
+                  <div>Uses: {{ rfq.submittedByToken.uses ?? 0 }} / {{ rfq.submittedByToken.maxUses ?? '—' }}</div>
+                  <div v-if="rfq.submittedByToken.revokedAt">Revoked: {{ formatDate(rfq.submittedByToken.revokedAt) }}</div>
+                </div>
+              </q-card-section>
             </q-card>
           </div>
 
@@ -254,9 +274,15 @@ const itemColumns: Array<{
   { name: 'details', label: 'Details', field: 'details', align: 'left' },
 ];
 
-const formatDate = (value?: string) => {
+const formatDate = (value?: string | null) => {
   if (!value) return '—';
   return new Date(value).toLocaleString();
+};
+
+const tokenPreview = (value: string | null | undefined) => {
+  if (!value) return '—';
+  if (value.length <= 8) return value;
+  return `${value.slice(0, 4)}…${value.slice(-4)}`;
 };
 
 const maskedToken = computed(() => {

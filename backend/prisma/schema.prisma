@@ -14,81 +14,96 @@ datasource db {
   provider = "postgresql"
 }
 
-
 model RFQ {
-  id           String       @id @default(cuid())
-  rfqNo        Int          @unique @default(autoincrement())
-  publicId     String?      @unique
-  company      String
-  contactName  String
-  contactEmail String
-  contactPhone String?
-  createdAt    DateTime     @default(now())
+  id                 String          @id @default(cuid())
+  rfqNo              Int             @unique @default(autoincrement())
+  publicId           String?         @unique
+  company            String
+  contactName        String
+  contactEmail       String
+  contactPhone       String?
+  submittedByType    SubmittedByType @default(ADMIN)
+  submittedByTokenId String?
+  createdAt          DateTime        @default(now())
 
-  items        RFQItem[]
-  attachments  Attachment[]
-  secureLinks  SecureLink[]
-  accessLogs   SecureLinkAccessLog[]
+  items            RFQItem[]
+  attachments      Attachment[]
+  secureLinks      SecureLink[]
+  accessLogs       SecureLinkAccessLog[]
+  submittedByToken SubmissionToken?      @relation(fields: [submittedByTokenId], references: [id], onDelete: SetNull)
 }
 
 model RFQItem {
-  id      String @id @default(cuid())
-  rfqId   String
-  name    String
+  id       String  @id @default(cuid())
+  rfqId    String
+  name     String
   quantity Int
-  details String?
+  details  String?
 
   rfq RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
 }
 
 model Attachment {
-  id       String @id @default(cuid())
-  rfqId    String
-  fileName String
-  fileUrl  String
-  fileSize Int?
+  id          String  @id @default(cuid())
+  rfqId       String
+  fileName    String
+  fileUrl     String
+  fileSize    Int?
   driveFileId String?
 
   rfq RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
 }
 
 model SecureLink {
-  id           String   @id @default(cuid())
-  token        String   @unique
-  rfqId        String
-  createdAt    DateTime @default(now())
-  expiresAt    DateTime
+  id            String    @id @default(cuid())
+  token         String    @unique
+  rfqId         String
+  createdAt     DateTime  @default(now())
+  expiresAt     DateTime
   firstAccessAt DateTime?
-  oneTime      Boolean  @default(false)
-  accessCount  Int      @default(0)
-  lastAccessIP String?
-  disabled     Boolean  @default(false)
+  oneTime       Boolean   @default(false)
+  accessCount   Int       @default(0)
+  lastAccessIP  String?
+  disabled      Boolean   @default(false)
 
-  rfq RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  rfq  RFQ                   @relation(fields: [rfqId], references: [id], onDelete: Cascade)
   logs SecureLinkAccessLog[]
 }
 
 model SecureLinkAccessLog {
-  id          String         @id @default(cuid())
+  id           String       @id @default(cuid())
   secureLinkId String?
-  rfqId       String?
-  token       String
-  result      AccessResult
-  ip          String?
-  userAgent   String?
-  createdAt   DateTime       @default(now())
+  rfqId        String?
+  token        String
+  result       AccessResult
+  ip           String?
+  userAgent    String?
+  createdAt    DateTime     @default(now())
 
-  secureLink  SecureLink?    @relation(fields: [secureLinkId], references: [id], onDelete: SetNull)
-  rfq         RFQ?           @relation(fields: [rfqId], references: [id], onDelete: SetNull)
+  secureLink SecureLink? @relation(fields: [secureLinkId], references: [id], onDelete: SetNull)
+  rfq        RFQ?        @relation(fields: [rfqId], references: [id], onDelete: SetNull)
 }
 
 model AdminSetting {
-  id                String   @id @default("default")
-  tokenExpiryDays   Int      @default(7)
-  oneTimeAccess     Boolean  @default(false)
+  id                 String   @id @default("default")
+  tokenExpiryDays    Int      @default(7)
+  oneTimeAccess      Boolean  @default(false)
   rateLimitPerMinute Int?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model SubmissionToken {
+  id        String    @id @default(cuid())
+  label     String?
+  tokenHash String    @unique
+  expiresAt DateTime?
+  maxUses   Int?
+  uses      Int       @default(0)
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  rfqs RFQ[]
 }
 
 enum AccessResult {
@@ -96,4 +111,9 @@ enum AccessResult {
   expired
   disabled
   invalid
+}
+
+enum SubmittedByType {
+  ADMIN
+  TOKEN
 }

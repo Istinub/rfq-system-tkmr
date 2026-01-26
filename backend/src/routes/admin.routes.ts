@@ -1,5 +1,13 @@
 import { Router } from 'express';
 import { apiKeyAuth } from '../middleware/apiKeyAuth.js';
+import { adminSubmissionTokenLimiter } from '../middleware/rateLimiters.js';
+import {
+  createSubmissionToken,
+  deleteSubmissionToken,
+  listSubmissionTokens,
+  revokeSubmissionToken,
+  updateSubmissionToken,
+} from '../controllers/submissionToken.controller.js';
 import {
   deleteAdminRfq,
   disableAdminToken,
@@ -27,5 +35,11 @@ router.post('/tokens/:id/regenerate', regenerateAdminToken);
 router.get('/logs', listAdminLogs);
 router.get('/settings', getAdminSettings);
 router.post('/settings', updateAdminSettings);
+
+router.post('/submission-tokens', adminSubmissionTokenLimiter, createSubmissionToken);
+router.get('/submission-tokens', adminSubmissionTokenLimiter, listSubmissionTokens);
+router.patch('/submission-tokens/:id', adminSubmissionTokenLimiter, updateSubmissionToken);
+router.post('/submission-tokens/:id/revoke', adminSubmissionTokenLimiter, revokeSubmissionToken);
+router.delete('/submission-tokens/:id', adminSubmissionTokenLimiter, deleteSubmissionToken);
 
 export default router;

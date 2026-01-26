@@ -1,5 +1,5 @@
 import type { RequestHandler } from 'express';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { PrismaClient, Prisma, SubmittedByType } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PassThrough } from 'stream';
 import prisma from '../lib/prisma.js';
@@ -118,6 +118,11 @@ const formatPublicId = (createdAt: Date, rfqNo: number): string => {
   return `RFQ-${year}-${sequence.toString().padStart(6, '0')}`;
 };
 
+const resolveSubmission = (submission: Express.Request['submission']) =>
+  submission?.type === 'TOKEN'
+    ? { submittedByType: SubmittedByType.TOKEN, submittedByTokenId: submission.tokenId }
+    : { submittedByType: SubmittedByType.ADMIN, submittedByTokenId: null };
+
 export const createRFQ: RequestHandler = async (req, res) => {
   try {
     const { company, contactName, contactEmail, contactPhone, items, attachments } = req.body as CreateRFQBody;
@@ -135,6 +140,8 @@ export const createRFQ: RequestHandler = async (req, res) => {
 
     const attachmentPayload = parseAttachments(attachments);
 
+    const submissionMeta = resolveSubmission(req.submission);
+
     const rfqRecord = await prisma.$transaction(async (tx: PrismaClient) => {
       const created = await tx.rFQ.create({
         data: {
@@ -142,8 +149,16 @@ export const createRFQ: RequestHandler = async (req, res) => {
           contactName: contactName.trim(),
           contactEmail: contactEmail.trim(),
           contactPhone: contactPhone?.trim(),
+          ...submissionMeta,
         },
       });
+
+      if (submissionMeta.submittedByType === SubmittedByType.TOKEN && submissionMeta.submittedByTokenId) {
+        await tx.submissionToken.update({
+          where: { id: submissionMeta.submittedByTokenId },
+          data: { uses: { increment: 1 } },
+        });
+      }
 
       if (itemPayload.length) {
         await tx.rFQItem.createMany({
@@ -309,37 +324,47 @@ export const createRFQMultipart: RequestHandler = async (req, res) => {
 
     const files = (req.files as Express.Multer.File[]) || [];
 
-    let rfqRecord = await retryPrismaP2028(() =>
-      prisma.rFQ.create({
-        data: {
-          company: String(company).trim(),
-          contactName: String(contactName).trim(),
-          contactEmail: String(contactEmail).trim(),
-          contactPhone: typeof contactPhone === 'string' ? contactPhone.trim() : undefined,
-        },
+    const submissionMeta = resolveSubmission(req.submission);
+
+    const rfqRecord = await retryPrismaP2028(() =>
+      prisma.$transaction(async (tx: PrismaClient) => {
+        const created = await tx.rFQ.create({
+          data: {
+            company: String(company).trim(),
+            contactName: String(contactName).trim(),
+            contactEmail: String(contactEmail).trim(),
+            contactPhone: typeof contactPhone === 'string' ? contactPhone.trim() : undefined,
+            ...submissionMeta,
+          },
+        });
+
+        if (submissionMeta.submittedByType === SubmittedByType.TOKEN && submissionMeta.submittedByTokenId) {
+          await tx.submissionToken.update({
+            where: { id: submissionMeta.submittedByTokenId },
+            data: { uses: { increment: 1 } },
+          });
+        }
+
+        const publicId = formatPublicId(created.createdAt, created.rfqNo);
+        const updated = await tx.rFQ.update({
+          where: { id: created.id },
+          data: { publicId },
+        });
+
+        if (itemPayload.length) {
+          await tx.rFQItem.createMany({
+            data: itemPayload.map((item: RFQItemInput) => ({
+              name: item.name,
+              quantity: item.quantity,
+              details: item.details,
+              rfqId: created.id,
+            })),
+          });
+        }
+
+        return updated;
       })
     );
-
-    const publicId = formatPublicId(rfqRecord.createdAt, rfqRecord.rfqNo);
-    rfqRecord = await retryPrismaP2028(() =>
-      prisma.rFQ.update({
-        where: { id: rfqRecord.id },
-        data: { publicId },
-      })
-    );
-
-    if (itemPayload.length) {
-      await retryPrismaP2028(() =>
-        prisma.rFQItem.createMany({
-          data: itemPayload.map((item: RFQItemInput) => ({
-            name: item.name,
-            quantity: item.quantity,
-            details: item.details,
-            rfqId: rfqRecord.id,
-          })),
-        })
-      );
-    }
 
     let uploads: { fileName: string; fileUrl: string; fileSize?: number; driveFileId: string }[] = [];
 

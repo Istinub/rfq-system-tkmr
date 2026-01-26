@@ -136,10 +136,16 @@ export const healthCheck = async (): Promise<HealthResponse> => {
 // { rfq: {...}, secureLink?: {...} }
 // ======================================
 export const createRFQ = async (
-  rfq: RFQRequest
+  rfq: RFQRequest,
+  submissionToken?: string
 ): Promise<CreateRFQResponse> => {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (submissionToken) {
+    headers['x-submit-token'] = submissionToken;
+  }
+
   const { data } = await apiClient.post('/rfq', rfq, {
-    headers: { 'Content-Type': 'application/json' },
+    headers,
   });
 
   const parsed = CreateRFQResponseSchema.safeParse(data);
@@ -156,10 +162,16 @@ export const createRFQ = async (
 };
 
 export const createRFQMultipart = async (
-  formData: FormData
+  formData: FormData,
+  submissionToken?: string
 ): Promise<CreateRFQResponse> => {
+  const headers: Record<string, string | undefined> = { 'Content-Type': undefined };
+  if (submissionToken) {
+    headers['x-submit-token'] = submissionToken;
+  }
+
   const { data } = await apiClient.post('/rfq/multipart', formData, {
-    headers: { 'Content-Type': undefined },
+    headers,
     timeout: 30000,
   });
 

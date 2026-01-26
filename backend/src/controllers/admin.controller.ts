@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type { RequestHandler } from 'express';
-import type { Attachment, RFQ, RFQItem, SecureLink, SecureLinkAccessLog } from '@prisma/client';
+import type { Attachment, RFQ, RFQItem, SecureLink, SecureLinkAccessLog, SubmissionToken } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { AdminSettingsService } from '../services/adminSettings.service.js';
@@ -60,14 +60,31 @@ const latestSecureLinkInclude = {
   },
 } satisfies Prisma.RFQInclude;
 
+const submissionTokenSelect = {
+  id: true,
+  createdAt: true,
+  expiresAt: true,
+  maxUses: true,
+  uses: true,
+  revokedAt: true,
+} satisfies Prisma.SubmissionTokenSelect;
+
+type SubmissionTokenMeta = Pick<SubmissionToken, 'id' | 'createdAt' | 'expiresAt' | 'maxUses' | 'uses' | 'revokedAt'>;
+
+const rfqSummaryInclude = {
+  ...latestSecureLinkInclude,
+  submittedByToken: { select: submissionTokenSelect },
+} satisfies Prisma.RFQInclude;
+
 const rfqDetailsInclude = {
   ...latestSecureLinkInclude,
   items: true,
   attachments: true,
+  submittedByToken: { select: submissionTokenSelect },
 } satisfies Prisma.RFQInclude;
 
 const serializeRfqSummary = (
-  rfq: RFQ & { secureLinks: SecureLink[] }
+  rfq: RFQ & { secureLinks: SecureLink[]; submittedByToken?: SubmissionTokenMeta | null }
 ) => {
   const [latestLink] = rfq.secureLinks;
   return {
@@ -78,12 +95,29 @@ const serializeRfqSummary = (
     contactName: rfq.contactName,
     contactEmail: rfq.contactEmail,
     createdAt: rfq.createdAt.toISOString(),
+    submittedByType: rfq.submittedByType,
+    submittedByTokenId: rfq.submittedByTokenId ?? null,
+    submittedByToken: rfq.submittedByToken
+      ? {
+          id: rfq.submittedByToken.id,
+          createdAt: rfq.submittedByToken.createdAt.toISOString(),
+          expiresAt: rfq.submittedByToken.expiresAt.toISOString(),
+          maxUses: rfq.submittedByToken.maxUses,
+          uses: rfq.submittedByToken.uses,
+          revokedAt: rfq.submittedByToken.revokedAt?.toISOString() ?? null,
+        }
+      : null,
     tokenStatus: resolveTokenStatus(latestLink),
   };
 };
 
 const serializeRfqDetails = (
-  rfq: RFQ & { secureLinks: SecureLink[]; items: RFQItem[]; attachments: Attachment[] }
+  rfq: RFQ & {
+    secureLinks: SecureLink[];
+    items: RFQItem[];
+    attachments: Attachment[];
+    submittedByToken?: SubmissionTokenMeta | null;
+  }
 ) => {
   const [latestLink] = rfq.secureLinks;
 
@@ -96,6 +130,18 @@ const serializeRfqDetails = (
     contactEmail: rfq.contactEmail,
     contactPhone: rfq.contactPhone ?? null,
     createdAt: rfq.createdAt.toISOString(),
+    submittedByType: rfq.submittedByType,
+    submittedByTokenId: rfq.submittedByTokenId ?? null,
+    submittedByToken: rfq.submittedByToken
+      ? {
+          id: rfq.submittedByToken.id,
+          createdAt: rfq.submittedByToken.createdAt.toISOString(),
+          expiresAt: rfq.submittedByToken.expiresAt.toISOString(),
+          maxUses: rfq.submittedByToken.maxUses,
+          uses: rfq.submittedByToken.uses,
+          revokedAt: rfq.submittedByToken.revokedAt?.toISOString() ?? null,
+        }
+      : null,
     tokenStatus: resolveTokenStatus(latestLink),
     notes: null,
     items: rfq.items.map((item) => ({
@@ -188,7 +234,7 @@ export const listAdminRfqs: RequestHandler = async (_req, res) => {
   try {
     const rfqs = await prisma.rFQ.findMany({
       orderBy: { createdAt: 'desc' },
-      include: latestSecureLinkInclude,
+      include: rfqSummaryInclude,
     });
 
     return res.json(rfqs.map(serializeRfqSummary));

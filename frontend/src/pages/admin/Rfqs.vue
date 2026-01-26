@@ -58,6 +58,24 @@
             </q-td>
           </template>
 
+          <template #body-cell-submittedBy="props">
+            <q-td :props="props">
+              <q-badge
+                :color="props.row.submittedByType === 'TOKEN' ? 'secondary' : 'primary'"
+                outline
+                class="text-uppercase"
+              >
+                {{ props.row.submittedByType || 'ADMIN' }}
+              </q-badge>
+            </q-td>
+          </template>
+
+          <template #body-cell-submissionToken="props">
+            <q-td :props="props">
+              <span class="font-mono">{{ props.row.submittedByType === 'TOKEN' ? tokenPreview(props.row.submittedByTokenId) : '—' }}</span>
+            </q-td>
+          </template>
+
           <template #body-cell-id="props">
             <q-td :props="props">
               {{ props.row.publicId }}
@@ -127,6 +145,8 @@ const columns: QTableColumn<AdminRfqSummary>[] = [
   { name: 'company', label: 'Company', field: 'company', align: 'left', sortable: true },
   { name: 'contact', label: 'Contact', field: 'contactName', align: 'left' },
   { name: 'createdAt', label: 'Created', field: 'createdAt', align: 'left', sortable: true },
+  { name: 'submittedBy', label: 'Submitted By', field: 'submittedByType', align: 'left' },
+  { name: 'submissionToken', label: 'Submission Token', field: 'submittedByTokenId', align: 'left' },
   { name: 'tokenStatus', label: 'Token Status', field: 'tokenStatus', align: 'left' },
   { name: 'actions', label: 'Actions', field: 'id', align: 'right' },
 ];
@@ -144,7 +164,15 @@ const filteredRfqs = computed(() => {
   const term = search.value.trim().toLowerCase();
   if (!term) return rfqs.value;
   return rfqs.value.filter((rfq) => {
-    return [rfq.publicId ?? '', rfq.id, rfq.company, rfq.contactName, rfq.tokenStatus]
+    return [
+      rfq.publicId ?? '',
+      rfq.id,
+      rfq.company,
+      rfq.contactName,
+      rfq.tokenStatus,
+      rfq.submittedByType ?? '',
+      rfq.submittedByTokenId ?? '',
+    ]
       .filter(Boolean)
       .some((field) => String(field).toLowerCase().includes(term));
   });
@@ -155,6 +183,12 @@ const isInitialLoading = computed(() => loading.value && rfqs.value.length === 0
 const formatDate = (value?: string) => {
   if (!value) return '—';
   return new Date(value).toLocaleString();
+};
+
+const tokenPreview = (value?: string | null) => {
+  if (!value) return '—';
+  if (value.length <= 8) return value;
+  return `${value.slice(0, 4)}…${value.slice(-4)}`;
 };
 
 const refreshData = () => {
@@ -208,5 +242,9 @@ onMounted(() => {
 
 .search-input {
   min-width: 260px;
+}
+
+.font-mono {
+  font-family: 'Roboto Mono', monospace;
 }
 </style>
