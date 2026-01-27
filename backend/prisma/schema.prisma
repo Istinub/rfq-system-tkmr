@@ -28,6 +28,7 @@ model RFQ {
 
   items            RFQItem[]
   attachments      Attachment[]
+  quotations       Quotation[]
   secureLinks      SecureLink[]
   accessLogs       SecureLinkAccessLog[]
   submittedByToken SubmissionToken?      @relation(fields: [submittedByTokenId], references: [id], onDelete: SetNull)
@@ -52,6 +53,19 @@ model Attachment {
   driveFileId String?
 
   rfq RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+}
+
+model Quotation {
+  id             String      @id @default(cuid())
+  rfqId          String
+  vendorName     String
+  quotationLink  String
+  method         QuoteMethod @default(FORM)
+  createdAt      DateTime    @default(now())
+
+  rfq RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+
+  @@index([rfqId])
 }
 
 model SecureLink {
@@ -116,4 +130,9 @@ enum AccessResult {
 enum SubmittedByType {
   ADMIN
   TOKEN
+}
+
+enum QuoteMethod {
+  FORM
+  MANUAL_EMAIL
 }

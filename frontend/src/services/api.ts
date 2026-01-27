@@ -216,4 +216,52 @@ export const getSecureLinkDetails = async (
   return parsed.data;
 };
 
+// ======================================
+// Submit Quotation (Secure Link)
+// ======================================
+export type SubmitQuotationPayload = {
+  vendorName: string;
+  method?: 'FORM' | 'MANUAL_EMAIL';
+  currency?: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  notes?: string;
+  lines?: Array<{ rfqItemId: string; unitPrice: number }>;
+};
+
+export const submitQuotation = async (
+  token: string,
+  payload: SubmitQuotationPayload,
+  logoFile?: File | null
+): Promise<{ quotation: { quotationLink: string; vendorName: string; method: string; createdAt: string } }> => {
+  const trimmedToken = token.trim();
+  if (!trimmedToken) {
+    throw new ApiError('Secure token is required.');
+  }
+
+  const formData = new FormData();
+  formData.append('vendorName', payload.vendorName);
+  formData.append('method', payload.method ?? 'FORM');
+  formData.append('currency', payload.currency ?? 'USD');
+  if (payload.contactName) formData.append('contactName', payload.contactName);
+  if (payload.contactEmail) formData.append('contactEmail', payload.contactEmail);
+  if (payload.contactPhone) formData.append('contactPhone', payload.contactPhone);
+  if (payload.notes) formData.append('notes', payload.notes);
+  if (payload.lines) {
+    formData.append('lines', JSON.stringify(payload.lines));
+  }
+  if (logoFile) {
+    formData.append('logo', logoFile);
+  }
+
+  const { data } = await apiClient.post(
+    `/secure-links/${encodeURIComponent(trimmedToken)}/quotations`,
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+
+  return data as { quotation: { quotationLink: string; vendorName: string; method: string; createdAt: string } };
+};
+
 export default apiClient;

@@ -17,6 +17,7 @@ import {
   listAdminLogs,
   listAdminRfqs,
   listAdminTokens,
+  listAdminQuotations,
   regenerateAdminToken,
   updateAdminSettings,
 } from '../controllers/admin.controller.js';
@@ -28,6 +29,7 @@ router.use(apiKeyAuth);
 router.get('/stats', getAdminStats);
 router.get('/rfqs', listAdminRfqs);
 router.get('/rfqs/:id', getAdminRfqById);
+router.get('/rfqs/:id/quotations', listAdminQuotations);
 router.delete('/rfqs/:id', deleteAdminRfq);
 router.get('/tokens', listAdminTokens);
 router.post('/tokens/:id/disable', disableAdminToken);

@@ -196,6 +196,38 @@ const handleError = (res: Parameters<RequestHandler>[1], error: unknown) => {
   return res.status(500).json({ message: 'Internal server error' });
 };
 
+export const listAdminQuotations: RequestHandler = async (req, res) => {
+  const id = ensureIdParam(req.params.id);
+
+  if (!id) {
+    return res.status(400).json({ message: 'RFQ id is required' });
+  }
+
+  try {
+    const quotations = await prisma.quotation.findMany({
+      where: { rfqId: id },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        vendorName: true,
+        quotationLink: true,
+        method: true,
+        createdAt: true,
+      },
+    });
+
+    return res.json(
+      quotations.map((q) => ({
+        vendorName: q.vendorName,
+        quotationLink: q.quotationLink,
+        method: q.method,
+        createdAt: q.createdAt.toISOString(),
+      }))
+    );
+  } catch (error) {
+    return handleError(res, error);
+  }
+};
+
 export const getAdminStats: RequestHandler = async (_req, res) => {
   try {
     const now = nowUtc();

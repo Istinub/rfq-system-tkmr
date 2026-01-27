@@ -97,6 +97,39 @@
                     </q-item>
                   </q-list>
                 </section>
+
+              </div>
+            </q-card-section>
+
+            <q-card-section v-if="uiState === 'valid' && rfq">
+              <div class="q-gutter-sm">
+                <div class="text-h6 text-weight-bold">Quotation</div>
+                <div class="row q-col-gutter-sm">
+                  <div class="col-auto">
+                    <q-btn color="primary" label="Submit Quotation" @click="quoteDialog = true" />
+                  </div>
+                  <div class="col-auto">
+                    <div class="column items-start q-gutter-xs">
+                      <q-btn
+                        outline
+                        color="primary"
+                        label="Email custom quotation"
+                        :href="mailtoHref"
+                      />
+                      <q-btn
+                        flat
+                        color="primary"
+                        label="Record manual email"
+                        :disable="!quotationForm.vendorName.trim() || submitLoading"
+                        :loading="submitLoading"
+                        @click="onManualEmailSubmit"
+                      />
+                      <div class="text-caption text-grey-7">
+                        Use this only after you have emailed your quotation manually.
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </q-card-section>
           </template>
@@ -107,13 +140,131 @@
         </q-card>
       </div>
     </div>
+
+    <q-dialog v-model="quoteDialog" persistent>
+      <q-card class="quote-dialog-card q-pa-md">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">Submit Quotation</div>
+          <q-space />
+          <q-btn dense flat round icon="close" @click="quoteDialog = false" />
+        </q-card-section>
+
+        <q-card-section class="q-gutter-md q-mt-md">
+          <q-banner v-if="dialogError" dense class="bg-negative text-white">
+            {{ dialogError }}
+          </q-banner>
+
+          <div class="q-gutter-md">
+            <div class="text-subtitle1 text-weight-bold">Vendor Details</div>
+            <q-separator spaced />
+            <div class="row q-col-gutter-md">
+              <div class="col-12 col-md-6">
+                <q-input v-model="quotationForm.vendorName" label="Vendor name" dense outlined required />
+              </div>
+              <div class="col-12 col-md-6">
+                <q-select
+                  v-model="quotationForm.currency"
+                  :options="currencyOptions"
+                  label="Currency"
+                  dense
+                  outlined
+                />
+              </div>
+              <div class="col-12 col-md-6">
+                <q-input v-model="quotationForm.contactName" label="Contact name" dense outlined />
+              </div>
+              <div class="col-12 col-md-6">
+                <q-input v-model="quotationForm.contactEmail" label="Contact email" type="email" dense outlined />
+              </div>
+              <div class="col-12 col-md-6">
+                <q-input v-model="quotationForm.contactPhone" label="Contact phone" dense outlined />
+              </div>
+              <div class="col-12">
+                <q-file
+                  v-model="quotationForm.logoFile"
+                  label="Logo (optional)"
+                  accept="image/png, image/jpeg, image/webp"
+                  dense
+                  outlined
+                  clearable
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="q-gutter-md">
+            <div class="text-subtitle1 text-weight-bold">Quotation Items</div>
+            <q-separator spaced />
+            <q-table
+              class="q-mt-sm"
+              flat
+              square
+              hide-bottom
+              :rows="rfq?.items || []"
+              :columns="itemColumns"
+              row-key="id"
+            >
+              <template #body-cell-unitPrice="props">
+                <q-td :props="props">
+                  <q-input
+                    v-model.number="quotationForm.lines[props.rowIndex].unitPrice"
+                    type="number"
+                    min="0"
+                    dense
+                    outlined
+                    step="0.01"
+                    :disable="quoteSubmitLoading"
+                    :placeholder="`Unit price for ${props.row.name}`"
+                  />
+                </q-td>
+              </template>
+              <template #body-cell-lineTotal="props">
+                <q-td :props="props">
+                  {{ formatCurrency(displayLineTotal(props.rowIndex)) }}
+                </q-td>
+              </template>
+            </q-table>
+
+            <div class="row justify-end text-weight-bold q-mt-md">
+              <div class="col-auto">Subtotal: {{ formatCurrency(totalAmount) }}</div>
+            </div>
+          </div>
+
+          <div class="q-gutter-md">
+            <div class="text-subtitle1 text-weight-bold">Notes</div>
+            <q-separator spaced />
+            <div class="row q-col-gutter-md">
+              <div class="col-12">
+                <q-input
+                  v-model="quotationForm.notes"
+                  type="textarea"
+                  label="Notes (optional)"
+                  outlined
+                  dense
+                  autogrow
+                />
+              </div>
+            </div>
+          </div>
+        </q-card-section>
+
+        <q-separator spaced />
+
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" color="primary" v-close-popup />
+          <q-btn color="primary" label="Continue" :loading="quoteSubmitLoading" :disable="quoteSubmitLoading" @click="onDialogSubmit" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { ApiError, getSecureLinkDetails, type SecureLinkDetailsResponse } from '../services/api';
+import { ApiError, getSecureLinkDetails, submitQuotation, type SecureLinkDetailsResponse } from '../services/api';
+import type { QTableProps } from 'quasar';
+import { useQuasar } from 'quasar';
 import type { RFQ } from '@rfq-system/shared';
 
 type SecureLinkState = 'loading' | 'valid' | 'expired' | 'invalid' | 'already-used' | 'error';
@@ -132,6 +283,23 @@ const secureLink = ref<SecureLinkDetailsResponse['secureLink'] | null>(null);
 const isLoading = ref(false);
 const uiState = ref<SecureLinkState>('loading');
 const stateOverride = ref<Partial<StateContext> | null>(null);
+const quoteSubmitLoading = ref(false);
+const dialogError = ref('');
+const submitLoading = ref(false);
+const submissionError = ref('');
+const currencyOptions = ['USD', 'AUD', 'SGD', 'EUR'];
+const quoteDialog = ref(false);
+const $q = useQuasar();
+const quotationForm = reactive({
+  vendorName: '',
+  currency: 'USD',
+  contactName: '',
+  contactEmail: '',
+  contactPhone: '',
+  notes: '',
+  logoFile: null as File | null,
+  lines: [] as Array<{ rfqItemId: string; unitPrice: number }>,
+});
 
 const STATE_CONTEXT: Record<SecureLinkState, StateContext> = {
   loading: {
@@ -291,6 +459,143 @@ const linkMeta = computed(() => {
   };
 });
 
+const itemColumns: QTableProps['columns'] = [
+  { name: 'name', label: 'Item', field: 'name', align: 'left' },
+  { name: 'quantity', label: 'Qty', field: 'quantity', align: 'right' },
+  { name: 'unitPrice', label: 'Unit Price', field: 'unitPrice', align: 'right' },
+  { name: 'lineTotal', label: 'Line Total', field: 'lineTotal', align: 'right' },
+];
+
+const syncLinesWithItems = () => {
+  if (!rfq.value) return;
+  quotationForm.lines = rfq.value.items.map((item) => ({ rfqItemId: item.id, unitPrice: quotationForm.lines.find((l) => l.rfqItemId === item.id)?.unitPrice ?? 0 }));
+};
+
+const displayLineTotal = (index: number): number => {
+  if (!rfq.value) return 0;
+  const item = rfq.value.items[index];
+  const line = quotationForm.lines[index];
+  if (!item || !line) return 0;
+  return item.quantity * (line.unitPrice || 0);
+};
+
+const totalAmount = computed(() => {
+  if (!rfq.value) return 0;
+  return rfq.value.items.reduce((sum, _item, idx) => sum + displayLineTotal(idx), 0);
+});
+
+const formatCurrency = (value: number) => {
+  const currency = quotationForm.currency || 'USD';
+  const formatter = new Intl.NumberFormat(undefined, { style: 'currency', currency, minimumFractionDigits: 2 });
+  return formatter.format(Number.isFinite(value) ? value : 0);
+};
+
+const mailtoHref = computed(() => {
+  if (!rfq.value) return '#';
+  const rfqId = rfq.value.publicId ?? rfq.value.id;
+  const subject = encodeURIComponent(`Quotation for ${rfqId}`);
+
+  const bodyLines = [] as string[];
+  const vendorName = quotationForm.vendorName?.trim();
+  if (vendorName) {
+    bodyLines.push(`Vendor: ${vendorName}`);
+  }
+  bodyLines.push(`RFQ: ${rfqId}`);
+  bodyLines.push('Details: Please find my quotation attached.');
+
+  const body = encodeURIComponent(bodyLines.join('\n'));
+  return `mailto:rfqtkmr@gmail.com?subject=${subject}&body=${body}`;
+});
+
+watch(
+  () => rfq.value,
+  (next) => {
+    if (next) {
+      syncLinesWithItems();
+    }
+  }
+);
+
+const validateForm = (method: 'FORM' | 'MANUAL_EMAIL') => {
+  if (!quotationForm.vendorName.trim()) {
+    submissionError.value = 'Vendor name is required.';
+    return false;
+  }
+  if (method === 'FORM') {
+    const hasMissing = quotationForm.lines.some((line) => !line || Number.isNaN(line.unitPrice));
+    if (hasMissing) {
+      submissionError.value = 'Please provide unit prices for all items.';
+      return false;
+    }
+  }
+  submissionError.value = '';
+  return true;
+};
+
+const onManualEmailSubmit = async () => {
+  if (!token.value || !rfq.value) return;
+  if (!validateForm('MANUAL_EMAIL')) return;
+  submitLoading.value = true;
+
+  try {
+    const payload = {
+      vendorName: quotationForm.vendorName.trim(),
+      method: 'MANUAL_EMAIL' as const,
+      currency: quotationForm.currency,
+      contactName: quotationForm.contactName || undefined,
+      contactEmail: quotationForm.contactEmail || undefined,
+      contactPhone: quotationForm.contactPhone || undefined,
+      notes: quotationForm.notes || undefined,
+      lines: undefined,
+    };
+
+    await submitQuotation(token.value, payload, null);
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Failed to submit quotation.';
+    submissionError.value = message;
+  } finally {
+    submitLoading.value = false;
+  }
+};
+
+const onDialogSubmit = async () => {
+  if (!token.value || !rfq.value) return;
+  dialogError.value = '';
+  if (!validateForm('FORM')) {
+    dialogError.value = submissionError.value;
+    return;
+  }
+  quoteSubmitLoading.value = true;
+  try {
+    const payload = {
+      vendorName: quotationForm.vendorName.trim(),
+      method: 'FORM' as const,
+      currency: quotationForm.currency,
+      contactName: quotationForm.contactName || undefined,
+      contactEmail: quotationForm.contactEmail || undefined,
+      contactPhone: quotationForm.contactPhone || undefined,
+      notes: quotationForm.notes || undefined,
+      lines: quotationForm.lines.map((line) => ({ rfqItemId: line.rfqItemId, unitPrice: Number(line.unitPrice) || 0 })),
+    };
+
+    const response = await submitQuotation(token.value, payload, quotationForm.logoFile);
+    quoteDialog.value = false;
+    const link = response?.quotation?.quotationLink;
+    submissionMessage.value = 'Quotation submitted successfully.';
+    submissionLink.value = link ?? '';
+    $q.notify({
+      type: 'positive',
+      message: 'Quotation submitted successfully',
+      actions: link ? [{ label: 'Open', color: 'white', handler: () => window.open(link, '_blank') }] : undefined,
+    });
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Failed to submit quotation.';
+    dialogError.value = message;
+  } finally {
+    quoteSubmitLoading.value = false;
+  }
+};
+
 onMounted(() => {
   if (token.value) {
     void fetchSecureLink(token.value);
@@ -365,6 +670,25 @@ watch(
 
 .valid-banner {
   margin-bottom: 12px;
+}
+
+.quote-dialog-card {
+  max-width: 720px;
+  width: 100%;
+}
+
+@media (max-width: 599px) {
+  .quote-dialog-card {
+    max-width: 100vw;
+    width: 100vw;
+    border-radius: 0;
+  }
+
+  .quote-dialog-card .q-card__section,
+  .quote-dialog-card .q-card__actions {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
 }
 
 @media (max-width: 767px) {
