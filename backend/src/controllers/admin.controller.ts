@@ -1,9 +1,16 @@
-import crypto from 'node:crypto';
+import crypto, { randomUUID } from 'node:crypto';
 import type { RequestHandler } from 'express';
-import type { Attachment, RFQ, RFQItem, SecureLink, SecureLinkAccessLog, SubmissionToken } from '@prisma/client';
+import type { Attachment, Quotation, QuotationLine, RFQ, RFQItem, SecureLink, SecureLinkAccessLog, SubmissionToken } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { AdminSettingsService } from '../services/adminSettings.service.js';
+import { renderQuotationPdf } from '../services/quotePdf.service.js';
+import { buildQuotationFolderName, uploadPdfBufferToFolder } from '../services/driveQuotationStorage.service.js';
+import { getDriveQuotationsFolderId } from '../lib/googleDrive.js';
+import { ensureFolder } from '../services/driveRfqStorage.service.js';
+import { getDrive } from '../lib/googleDrive.js';
+import { sendEmail } from '../services/mailer.js';
+import { sendEmail } from '../services/mailer.js';
 
 const RFQS_PER_MONTH_WINDOW = 6;
 
@@ -223,6 +230,831 @@ export const listAdminQuotations: RequestHandler = async (req, res) => {
         createdAt: q.createdAt.toISOString(),
       }))
     );
+  } catch (error) {
+    return handleError(res, error);
+  }
+};
+
+const serializeAdminQuotation = (
+  quotation: Quotation & { rfq: { publicId: string | null; company: string }; lines: QuotationLine[] }
+) => {
+  return {
+    id: quotation.id,
+    rfq: {
+      publicId: quotation.rfq.publicId ?? null,
+      company: quotation.rfq.company,
+    },
+    vendorName: quotation.vendorName,
+    contactName: quotation.contactName ?? null,
+    contactEmail: quotation.contactEmail ?? null,
+    contactPhone: quotation.contactPhone ?? null,
+    currency: quotation.currency,
+    notes: quotation.notes ?? null,
+    quotationLink: quotation.quotationLink,
+    method: quotation.method,
+    status: quotation.status,
+    driveFileId: quotation.driveFileId ?? null,
+    driveFolderId: quotation.driveFolderId ?? null,
+    createdAt: quotation.createdAt.toISOString(),
+    updatedAt: quotation.updatedAt.toISOString(),
+    lines: quotation.lines.map((line) => ({
+      id: line.id,
+      name: line.name,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      lineTotal: line.lineTotal,
+      details: line.details ?? null,
+    })),
+  };
+};
+
+type QuotationEmailContext = {
+  rfqPublicId: string;
+  rfqCompany: string;
+  quotationLink: string;
+};
+
+const buildEmailContent = (
+  kind: 'approved' | 'rejected' | 'customer-accepted',
+  context: QuotationEmailContext
+) => {
+  const { rfqPublicId, rfqCompany, quotationLink } = context;
+  const subject =
+    kind === 'approved'
+      ? `Quotation Available – ${rfqPublicId} (${rfqCompany})`
+      : kind === 'rejected'
+      ? `Quotation Update – ${rfqPublicId} (${rfqCompany})`
+      : `Quotation Accepted – ${rfqPublicId} (${rfqCompany})`;
+
+  const decisionLine =
+    kind === 'approved'
+      ? 'TKMR has approved a quotation for your RFQ.'
+      : kind === 'rejected'
+      ? 'Your quotation has been reviewed and was rejected by TKMR.'
+      : 'Customer has accepted the quotation.';
+
+  const text = [
+    'Hello,',
+    '',
+    decisionLine,
+    `RFQ Reference: ${rfqPublicId}`,
+    `Company: ${rfqCompany}`,
+    `Quotation link: ${quotationLink}`,
+    '',
+    'TKMR Marine & Offshore Engineering Pte. Ltd.',
+  ].join('\n');
+
+  return { subject, text };
+};
+
+const attemptSendEmail = async (
+  tag: string,
+  recipients: string[],
+  content: { subject: string; text: string },
+  meta: { quotationId: string; rfqPublicId: string }
+): Promise<{ warning?: { message: string } | null }> => {
+  if (recipients.length === 0) {
+    return { warning: null };
+  }
+
+  const result = await sendEmail({
+    to: recipients,
+    subject: content.subject,
+    text: content.text,
+  });
+
+  if (result.ok) {
+    return { warning: null };
+  }
+
+  if (result.skipped && result.error?.includes('No recipients')) {
+    return { warning: null };
+  }
+
+  const errorId = randomUUID();
+  console.error(`[${tag}]`, {
+    errorId,
+    quotationId: meta.quotationId,
+    rfqPublicId: meta.rfqPublicId,
+    message: result.error ?? 'Failed to send email',
+  });
+
+  return { warning: { message: result.error ?? 'Email failed to send.' } };
+};
+
+export const listAdminQuotationIndex: RequestHandler = async (_req, res) => {
+  try {
+    const quotations = await prisma.quotation.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        vendorName: true,
+        quotationLink: true,
+        currency: true,
+        status: true,
+        method: true,
+        createdAt: true,
+        updatedAt: true,
+        rfq: { select: { publicId: true, company: true } },
+      },
+    });
+
+    return res.json(
+      quotations.map((quotation) => ({
+        id: quotation.id,
+        rfq: {
+          publicId: quotation.rfq.publicId ?? null,
+          company: quotation.rfq.company,
+        },
+        vendorName: quotation.vendorName,
+        quotationLink: quotation.quotationLink,
+        currency: quotation.currency,
+        status: quotation.status,
+        method: quotation.method,
+        createdAt: quotation.createdAt.toISOString(),
+        updatedAt: quotation.updatedAt.toISOString(),
+      }))
+    );
+  } catch (err) {
+    const errorId = randomUUID();
+    console.error('[GET /api/admin/quotations]', {
+      errorId,
+      name: (err as any)?.name,
+      message: (err as any)?.message,
+      stack: (err as any)?.stack,
+      prismaCode: err instanceof Prisma.PrismaClientKnownRequestError ? err.code : undefined,
+      prismaMeta: err instanceof Prisma.PrismaClientKnownRequestError ? err.meta : undefined,
+    });
+    return res.status(500).json({ errorId, message: 'Internal server error' });
+  }
+};
+
+export const getAdminQuotationById: RequestHandler = async (req, res) => {
+  const id = ensureIdParam(req.params.id);
+  if (!id) {
+    return res.status(400).json({ message: 'Quotation id is required' });
+  }
+
+  try {
+    const quotation = await prisma.quotation.findUnique({
+      where: { id },
+      include: {
+        rfq: { select: { publicId: true, company: true } },
+        lines: true,
+      },
+    });
+
+    if (!quotation) {
+      return res.status(404).json({ message: 'Quotation not found' });
+    }
+
+    return res.json(serializeAdminQuotation(quotation));
+  } catch (error) {
+    return handleError(res, error);
+  }
+};
+
+const normalizeStatus = (value: unknown): Quotation['status'] | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const upper = value.trim().toUpperCase();
+  if (upper === 'RECEIVED' || upper === 'REVISED' || upper === 'APPROVED' || upper === 'REJECTED' || upper === 'CUSTOMER_ACCEPTED') {
+    return upper as Quotation['status'];
+  }
+  return undefined;
+};
+
+const buildStatusEmail = (args: {
+  status: 'APPROVED' | 'REJECTED' | 'CUSTOMER_ACCEPTED';
+  rfqPublicId: string;
+  company: string;
+  quotationLink: string;
+  reason?: string;
+}) => {
+  const { status, rfqPublicId, company, quotationLink, reason } = args;
+  const subjectBase = `${rfqPublicId} (${company})`;
+
+  if (status === 'REJECTED') {
+    const reasonLine = reason ? `\nReason: ${reason}\n` : '';
+    return {
+      subject: `Quotation Update – ${subjectBase}`,
+      text:
+        `Your quotation has been reviewed and was rejected by TKMR.\n` +
+        `RFQ Reference: ${rfqPublicId}\nCompany: ${company}\n` +
+        `${reasonLine}` +
+        `Quotation Link: ${quotationLink}\n\n` +
+        `TKMR Marine & Offshore Engineering Pte. Ltd.`,
+    };
+  }
+
+  if (status === 'APPROVED') {
+    return {
+      subject: `Quotation Available – ${subjectBase}`,
+      text:
+        `TKMR has approved a quotation for your RFQ.\n` +
+        `RFQ Reference: ${rfqPublicId}\nCompany: ${company}\n` +
+        `Quotation Link: ${quotationLink}\n\n` +
+        `TKMR Marine & Offshore Engineering Pte. Ltd.`,
+    };
+  }
+
+  return {
+    subject: `Quotation Accepted – ${subjectBase}`,
+    text:
+      `Customer has accepted the quotation.\n` +
+      `RFQ Reference: ${rfqPublicId}\nCompany: ${company}\n` +
+      `Quotation Link: ${quotationLink}\n\n` +
+      `TKMR Marine & Offshore Engineering Pte. Ltd.`,
+  };
+};
+
+export const updateAdminQuotationStatus: RequestHandler = async (req, res) => {
+  const id = ensureIdParam(req.params.id);
+  if (!id) {
+    return res.status(400).json({ message: 'Quotation id is required' });
+  }
+
+  const payload = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
+  const status = normalizeStatus(payload.status);
+  const reason = typeof payload.reason === 'string' ? payload.reason.trim() : undefined;
+
+  if (!status || !['APPROVED', 'REJECTED', 'CUSTOMER_ACCEPTED'].includes(status)) {
+    return res.status(400).json({ message: 'Invalid status' });
+  }
+
+  try {
+    const quotation = await prisma.quotation.findUnique({
+      where: { id },
+      include: {
+        rfq: { select: { publicId: true, company: true, contactEmail: true, contactName: true } },
+        lines: true,
+      },
+    });
+
+    if (!quotation) {
+      return res.status(404).json({ message: 'Quotation not found' });
+    }
+
+    const updated = await prisma.quotation.update({
+      where: { id },
+      data: { status },
+      include: {
+        rfq: { select: { publicId: true, company: true } },
+        lines: true,
+      },
+    });
+
+    const rfqPublicId = quotation.rfq.publicId ?? 'RFQ Reference unavailable';
+    const emailTemplate = buildStatusEmail({
+      status: status as 'APPROVED' | 'REJECTED' | 'CUSTOMER_ACCEPTED',
+      rfqPublicId,
+      company: quotation.rfq.company,
+      quotationLink: quotation.quotationLink,
+      reason,
+    });
+
+    const vendorEmail = quotation.contactEmail?.trim() || '';
+    const rfqEmail = quotation.rfq.contactEmail?.trim() || '';
+    const emailed = { vendor: false, rfqContact: false };
+    let emailedWarning: { message: string } | null = null;
+
+    const sendTo = async (targets: string[], tag: string) => {
+      const result = await sendEmail({
+        to: targets,
+        subject: emailTemplate.subject,
+        text: emailTemplate.text,
+      });
+
+      if (!result.ok) {
+        const errorId = randomUUID();
+        console.warn(`[${tag}] email skipped`, {
+          errorId,
+          message: result.error,
+        });
+        emailedWarning = { message: result.error || 'Email delivery failed.' };
+      }
+
+      return result.ok;
+    };
+
+    if (status === 'REJECTED') {
+      if (vendorEmail) {
+        emailed.vendor = await sendTo([vendorEmail], 'REJECTED');
+      } else {
+        emailedWarning = { message: 'Vendor email missing; no rejection email sent.' };
+      }
+    } else if (status === 'APPROVED') {
+      if (rfqEmail) {
+        emailed.rfqContact = await sendTo([rfqEmail], 'APPROVED');
+      } else {
+        emailedWarning = { message: 'RFQ contact email missing; no approval email sent.' };
+      }
+    } else {
+      const targets = [vendorEmail, rfqEmail].filter(Boolean);
+      if (targets.length > 0) {
+        const ok = await sendTo(targets, 'CUSTOMER_ACCEPTED');
+        emailed.vendor = Boolean(vendorEmail) && ok;
+        emailed.rfqContact = Boolean(rfqEmail) && ok;
+      } else {
+        emailedWarning = { message: 'No recipient emails available for customer accepted notice.' };
+      }
+    }
+
+    return res.json({ updated: true, quotation: serializeAdminQuotation(updated), emailed, emailedWarning });
+  } catch (error) {
+    const errorId = randomUUID();
+    console.error('[PATCH /api/admin/quotations/:id/status]', {
+      errorId,
+      name: (error as any)?.name,
+      message: (error as any)?.message,
+      stack: (error as any)?.stack,
+      prismaCode: error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined,
+      prismaMeta: error instanceof Prisma.PrismaClientKnownRequestError ? error.meta : undefined,
+    });
+    return res.status(500).json({ errorId, message: 'Internal server error' });
+  }
+};
+
+export const updateAdminQuotationById: RequestHandler = async (req, res) => {
+  const id = ensureIdParam(req.params.id);
+  if (!id) {
+    return res.status(400).json({ message: 'Quotation id is required' });
+  }
+
+  try {
+    const quotation = await prisma.quotation.findUnique({
+      where: { id },
+      include: {
+        rfq: { select: { publicId: true, company: true } },
+        lines: true,
+      },
+    });
+
+    if (!quotation) {
+      return res.status(404).json({ message: 'Quotation not found' });
+    }
+
+    const payload = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
+    const updateData: Prisma.QuotationUpdateInput = {};
+
+    if (typeof payload.vendorName === 'string') updateData.vendorName = payload.vendorName.trim();
+    if (typeof payload.contactName === 'string') updateData.contactName = payload.contactName.trim() || null;
+    if (payload.contactName === null) updateData.contactName = null;
+    if (typeof payload.contactEmail === 'string') updateData.contactEmail = payload.contactEmail.trim() || null;
+    if (payload.contactEmail === null) updateData.contactEmail = null;
+    if (typeof payload.contactPhone === 'string') updateData.contactPhone = payload.contactPhone.trim() || null;
+    if (payload.contactPhone === null) updateData.contactPhone = null;
+    if (typeof payload.currency === 'string') updateData.currency = payload.currency.trim() || quotation.currency;
+    if (typeof payload.notes === 'string') updateData.notes = payload.notes.trim() || null;
+    if (payload.notes === null) updateData.notes = null;
+    const status = normalizeStatus(payload.status);
+    if (status) updateData.status = status;
+
+    const linesPayload = Array.isArray(payload.lines) ? payload.lines : null;
+
+    await prisma.$transaction(async (tx) => {
+      if (Object.keys(updateData).length > 0) {
+        await tx.quotation.update({ where: { id }, data: updateData });
+      }
+
+      if (linesPayload) {
+        for (const entry of linesPayload) {
+          if (!entry || typeof entry !== 'object') continue;
+          const record = entry as { id?: string; unitPrice?: number };
+          if (!record.id) continue;
+          const existing = quotation.lines.find((line) => line.id === record.id);
+          if (!existing) continue;
+          const unitPrice = typeof record.unitPrice === 'number' ? record.unitPrice : existing.unitPrice;
+          const lineTotal = existing.quantity * unitPrice;
+          await tx.quotationLine.update({
+            where: { id: record.id },
+            data: { unitPrice, lineTotal },
+          });
+        }
+      }
+    });
+
+    const refreshed = await prisma.quotation.findUnique({
+      where: { id },
+      include: {
+        rfq: { select: { publicId: true, company: true } },
+        lines: true,
+      },
+    });
+
+    if (!refreshed) {
+      return res.status(404).json({ message: 'Quotation not found' });
+    }
+
+    return res.json(serializeAdminQuotation(refreshed));
+  } catch (error) {
+    return handleError(res, error);
+  }
+};
+
+type QuotationLinePayload = {
+  id?: string;
+  name?: string;
+  quantity?: number;
+  unitPrice?: number;
+  details?: string | null;
+  rfqItemId?: string;
+};
+
+const normalizeLinesPayload = (
+  payload: QuotationLinePayload[] | null,
+  existing: QuotationLine[]
+): Array<{ name: string; quantity: number; unitPrice: number; lineTotal: number; details?: string | null }> | null => {
+  if (!payload) return null;
+  const results: Array<{ name: string; quantity: number; unitPrice: number; lineTotal: number; details?: string | null }> = [];
+  for (const entry of payload) {
+    if (!entry || typeof entry !== 'object') continue;
+    const existingLine = entry.id ? existing.find((line) => line.id === entry.id) : undefined;
+    const name = (entry.name ?? existingLine?.name ?? '').trim();
+    const quantity = typeof entry.quantity === 'number' ? entry.quantity : existingLine?.quantity ?? 0;
+    const unitPrice = typeof entry.unitPrice === 'number' ? entry.unitPrice : existingLine?.unitPrice ?? 0;
+    const details = typeof entry.details === 'string' ? entry.details : existingLine?.details ?? null;
+    if (!name || Number.isNaN(quantity) || Number.isNaN(unitPrice)) continue;
+    results.push({
+      name,
+      quantity,
+      unitPrice,
+      lineTotal: quantity * unitPrice,
+      details,
+    });
+  }
+
+  return results;
+};
+
+export const updateAdminQuotation: RequestHandler = async (req, res) => {
+  const id = ensureIdParam(req.params.id);
+  if (!id) {
+    return res.status(400).json({ message: 'Quotation id is required' });
+  }
+
+  try {
+    const quotation = await prisma.quotation.findUnique({
+      where: { id },
+      include: {
+        rfq: { select: { publicId: true, company: true } },
+        lines: true,
+      },
+    });
+
+    if (!quotation) {
+      return res.status(404).json({ message: 'Quotation not found' });
+    }
+
+    const payload = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
+    const updateData: Prisma.QuotationUpdateInput = {};
+
+    const vendorName = typeof payload.vendorName === 'string' ? payload.vendorName.trim() : undefined;
+    const contactName = typeof payload.contactName === 'string' ? payload.contactName.trim() : undefined;
+    const contactEmail = typeof payload.contactEmail === 'string' ? payload.contactEmail.trim() : undefined;
+    const contactPhone = typeof payload.contactPhone === 'string' ? payload.contactPhone.trim() : undefined;
+    const currency = typeof payload.currency === 'string' ? payload.currency.trim() : undefined;
+    const notes = typeof payload.notes === 'string' ? payload.notes.trim() : undefined;
+    const status = normalizeStatus(payload.status);
+
+    if (vendorName !== undefined) updateData.vendorName = vendorName;
+    if (contactName !== undefined) updateData.contactName = contactName || null;
+    if (contactEmail !== undefined) updateData.contactEmail = contactEmail || null;
+    if (contactPhone !== undefined) updateData.contactPhone = contactPhone || null;
+    if (currency !== undefined) updateData.currency = currency || quotation.currency;
+    if (notes !== undefined) updateData.notes = notes || null;
+
+    const linesPayload = Array.isArray(payload.lines) ? (payload.lines as QuotationLinePayload[]) : null;
+    const normalizedLines = normalizeLinesPayload(linesPayload, quotation.lines);
+
+    if (!status && (vendorName !== undefined || contactName !== undefined || contactEmail !== undefined || contactPhone !== undefined || currency !== undefined || notes !== undefined || normalizedLines)) {
+      updateData.status = 'REVISED';
+    }
+
+    if (status) {
+      updateData.status = status;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (Object.keys(updateData).length > 0) {
+        await tx.quotation.update({ where: { id }, data: updateData });
+      }
+
+      if (normalizedLines) {
+        await tx.quotationLine.deleteMany({ where: { quotationId: id } });
+        if (normalizedLines.length) {
+          await tx.quotationLine.createMany({
+            data: normalizedLines.map((line) => ({
+              quotationId: id,
+              name: line.name,
+              quantity: line.quantity,
+              unitPrice: line.unitPrice,
+              lineTotal: line.lineTotal,
+              details: line.details ?? null,
+            })),
+          });
+        }
+      }
+    });
+
+    const refreshed = await prisma.quotation.findUnique({
+      where: { id },
+      include: {
+        rfq: { select: { publicId: true, company: true } },
+        lines: true,
+      },
+    });
+
+    if (!refreshed) {
+      return res.status(404).json({ message: 'Quotation not found' });
+    }
+
+    return res.json({ quotation: serializeAdminQuotation(refreshed) });
+  } catch (err) {
+    const errorId = randomUUID();
+    console.error('[PATCH /api/admin/quotations/:id]', {
+      errorId,
+      name: (err as any)?.name,
+      message: (err as any)?.message,
+      stack: (err as any)?.stack,
+      prismaCode: err instanceof Prisma.PrismaClientKnownRequestError ? err.code : undefined,
+      prismaMeta: err instanceof Prisma.PrismaClientKnownRequestError ? err.meta : undefined,
+    });
+    return res.status(500).json({ errorId, message: 'Internal server error' });
+  }
+};
+
+export const approveAdminQuotation: RequestHandler = async (req, res) => {
+  const id = ensureIdParam(req.params.id);
+  if (!id) {
+    return res.status(400).json({ message: 'Quotation id is required' });
+  }
+
+  try {
+    const updated = await prisma.quotation.update({
+      where: { id },
+      data: { status: 'APPROVED' },
+      include: {
+        rfq: { select: { id: true, publicId: true, company: true, contactEmail: true, contactName: true } },
+        lines: true,
+      },
+    });
+
+    const rfqPublicId = updated.rfq.publicId ?? 'RFQ';
+    const content = buildEmailContent('approved', {
+      rfqPublicId,
+      rfqCompany: updated.rfq.company,
+      quotationLink: updated.quotationLink,
+    });
+
+    const recipients = [updated.rfq.contactEmail ?? ''].filter(Boolean);
+    const emailResult = await attemptSendEmail(
+      'PATCH /api/admin/quotations/:id/approve',
+      recipients,
+      content,
+      { quotationId: id, rfqPublicId }
+    );
+
+    return res.json({ quotation: serializeAdminQuotation(updated), emailWarning: emailResult.warning ?? null });
+  } catch (error) {
+    const errorId = randomUUID();
+    console.error('[PATCH /api/admin/quotations/:id/approve]', {
+      errorId,
+      name: (error as any)?.name,
+      message: (error as any)?.message,
+      stack: (error as any)?.stack,
+      prismaCode: error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined,
+      prismaMeta: error instanceof Prisma.PrismaClientKnownRequestError ? error.meta : undefined,
+    });
+    return res.status(500).json({ errorId, message: 'Internal server error' });
+  }
+};
+
+export const rejectAdminQuotation: RequestHandler = async (req, res) => {
+  const id = ensureIdParam(req.params.id);
+  if (!id) {
+    return res.status(400).json({ message: 'Quotation id is required' });
+  }
+
+  try {
+    const updated = await prisma.quotation.update({
+      where: { id },
+      data: { status: 'REJECTED' },
+      include: {
+        rfq: { select: { id: true, publicId: true, company: true, contactEmail: true, contactName: true } },
+        lines: true,
+      },
+    });
+
+    const rfqPublicId = updated.rfq.publicId ?? 'RFQ';
+    const content = buildEmailContent('rejected', {
+      rfqPublicId,
+      rfqCompany: updated.rfq.company,
+      quotationLink: updated.quotationLink,
+    });
+
+    const recipients = [updated.contactEmail ?? ''].filter(Boolean);
+    const emailResult = await attemptSendEmail(
+      'PATCH /api/admin/quotations/:id/reject',
+      recipients,
+      content,
+      { quotationId: id, rfqPublicId }
+    );
+
+    return res.json({ quotation: serializeAdminQuotation(updated), emailWarning: emailResult.warning ?? null });
+  } catch (error) {
+    const errorId = randomUUID();
+    console.error('[PATCH /api/admin/quotations/:id/reject]', {
+      errorId,
+      name: (error as any)?.name,
+      message: (error as any)?.message,
+      stack: (error as any)?.stack,
+      prismaCode: error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined,
+      prismaMeta: error instanceof Prisma.PrismaClientKnownRequestError ? error.meta : undefined,
+    });
+    return res.status(500).json({ errorId, message: 'Internal server error' });
+  }
+};
+
+export const markCustomerAcceptedAdminQuotation: RequestHandler = async (req, res) => {
+  const id = ensureIdParam(req.params.id);
+  if (!id) {
+    return res.status(400).json({ message: 'Quotation id is required' });
+  }
+
+  try {
+    const updated = await prisma.quotation.update({
+      where: { id },
+      data: { status: 'CUSTOMER_ACCEPTED' },
+      include: {
+        rfq: { select: { id: true, publicId: true, company: true, contactEmail: true, contactName: true } },
+        lines: true,
+      },
+    });
+
+    const rfqPublicId = updated.rfq.publicId ?? 'RFQ';
+    const content = buildEmailContent('customer-accepted', {
+      rfqPublicId,
+      rfqCompany: updated.rfq.company,
+      quotationLink: updated.quotationLink,
+    });
+
+    const recipients = [updated.contactEmail ?? '', updated.rfq.contactEmail ?? ''].filter(Boolean);
+    const emailResult = await attemptSendEmail(
+      'PATCH /api/admin/quotations/:id/customer-accepted',
+      recipients,
+      content,
+      { quotationId: id, rfqPublicId }
+    );
+
+    return res.json({ quotation: serializeAdminQuotation(updated), emailWarning: emailResult.warning ?? null });
+  } catch (error) {
+    const errorId = randomUUID();
+    console.error('[PATCH /api/admin/quotations/:id/customer-accepted]', {
+      errorId,
+      name: (error as any)?.name,
+      message: (error as any)?.message,
+      stack: (error as any)?.stack,
+      prismaCode: error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined,
+      prismaMeta: error instanceof Prisma.PrismaClientKnownRequestError ? error.meta : undefined,
+    });
+    return res.status(500).json({ errorId, message: 'Internal server error' });
+  }
+};
+
+export const deleteAdminQuotation: RequestHandler = async (req, res) => {
+  const id = ensureIdParam(req.params.id);
+  if (!id) {
+    return res.status(400).json({ message: 'Quotation id is required' });
+  }
+
+  try {
+    const quotation = await prisma.quotation.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        driveFileId: true,
+      },
+    });
+
+    if (!quotation) {
+      return res.status(404).json({ message: 'Quotation not found' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.quotationLine.deleteMany({ where: { quotationId: id } });
+      await tx.quotation.delete({ where: { id } });
+    });
+
+    if (quotation.driveFileId) {
+      try {
+        const drive = getDrive();
+        await drive.files.delete({ fileId: quotation.driveFileId, supportsAllDrives: true });
+      } catch (driveError) {
+        console.error('[Drive delete failed]', {
+          quotationId: id,
+          message: driveError instanceof Error ? driveError.message : String(driveError),
+        });
+      }
+    }
+
+    return res.json({ message: 'Quotation deleted' });
+  } catch (err) {
+    const errorId = randomUUID();
+    console.error('[DELETE /api/admin/quotations/:id]', {
+      errorId,
+      name: (err as any)?.name,
+      message: (err as any)?.message,
+      stack: (err as any)?.stack,
+      prismaCode: err instanceof Prisma.PrismaClientKnownRequestError ? err.code : undefined,
+      prismaMeta: err instanceof Prisma.PrismaClientKnownRequestError ? err.meta : undefined,
+    });
+    return res.status(500).json({ errorId, message: 'Internal server error' });
+  }
+};
+
+const formatTimestamp = (date: Date): string => {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  return `${year}${month}${day}-${hours}${minutes}`;
+};
+
+export const regenerateAdminQuotationPdf: RequestHandler = async (req, res) => {
+  const id = ensureIdParam(req.params.id);
+  if (!id) {
+    return res.status(400).json({ message: 'Quotation id is required' });
+  }
+
+  try {
+    const quotation = await prisma.quotation.findUnique({
+      where: { id },
+      include: {
+        rfq: { select: { id: true, publicId: true, company: true } },
+        lines: true,
+      },
+    });
+
+    if (!quotation) {
+      return res.status(404).json({ message: 'Quotation not found' });
+    }
+
+    const rfqPublicId = quotation.rfq.publicId;
+    if (!rfqPublicId) {
+      return res.status(400).json({ message: 'RFQ public id is required to regenerate PDF' });
+    }
+
+    const pdfBuffer = await renderQuotationPdf({
+      rfqPublicId,
+      requestingCompanyName: quotation.rfq.company,
+      vendorName: quotation.vendorName,
+      vendorContact: {
+        name: quotation.contactName ?? undefined,
+        email: quotation.contactEmail ?? undefined,
+        phone: quotation.contactPhone ?? undefined,
+      },
+      currency: quotation.currency,
+      items: quotation.lines.map((line) => ({
+        name: line.name,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        lineTotal: line.lineTotal,
+        details: line.details ?? undefined,
+      })),
+      notes: quotation.notes ?? undefined,
+    });
+
+    const folderId = quotation.driveFolderId
+      ? quotation.driveFolderId
+      : (await ensureFolder(
+          getDriveQuotationsFolderId(),
+          buildQuotationFolderName(rfqPublicId, quotation.vendorName)
+        )).id;
+    const fileName = `Quotation_${formatTimestamp(new Date())}.pdf`;
+    const makePublic = process.env.DRIVE_PUBLIC_FILES === 'true';
+    const uploadResult = await uploadPdfBufferToFolder({
+      folderId,
+      fileName,
+      pdfBuffer,
+      makePublic,
+    });
+
+    const updated = await prisma.quotation.update({
+      where: { id },
+      data: {
+        quotationLink: uploadResult.webViewLink,
+        driveFileId: uploadResult.driveFileId,
+        driveFolderId: folderId,
+      },
+      include: {
+        rfq: { select: { id: true, publicId: true, company: true } },
+        lines: true,
+      },
+    });
+
+    return res.json(serializeAdminQuotation(updated));
   } catch (error) {
     return handleError(res, error);
   }

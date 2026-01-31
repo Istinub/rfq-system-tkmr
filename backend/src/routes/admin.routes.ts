@@ -11,14 +11,24 @@ import {
 import {
   deleteAdminRfq,
   disableAdminToken,
+  deleteAdminQuotation,
+  approveAdminQuotation,
+  getAdminQuotationById,
   getAdminRfqById,
   getAdminSettings,
   getAdminStats,
+  listAdminQuotationIndex,
   listAdminLogs,
   listAdminRfqs,
   listAdminTokens,
   listAdminQuotations,
+  markCustomerAcceptedAdminQuotation,
+  regenerateAdminQuotationPdf,
+  rejectAdminQuotation,
   regenerateAdminToken,
+  updateAdminQuotationStatus,
+  updateAdminQuotation,
+  updateAdminQuotationById,
   updateAdminSettings,
 } from '../controllers/admin.controller.js';
 
@@ -30,6 +40,15 @@ router.get('/stats', getAdminStats);
 router.get('/rfqs', listAdminRfqs);
 router.get('/rfqs/:id', getAdminRfqById);
 router.get('/rfqs/:id/quotations', listAdminQuotations);
+router.get('/quotations', listAdminQuotationIndex);
+router.get('/quotations/:id', getAdminQuotationById);
+router.patch('/quotations/:id', updateAdminQuotation);
+router.patch('/quotations/:id/approve', approveAdminQuotation);
+router.patch('/quotations/:id/reject', rejectAdminQuotation);
+router.patch('/quotations/:id/customer-accepted', markCustomerAcceptedAdminQuotation);
+router.patch('/quotations/:id/status', updateAdminQuotationStatus);
+router.post('/quotations/:id/regenerate-pdf', regenerateAdminQuotationPdf);
+router.delete('/quotations/:id', deleteAdminQuotation);
 router.delete('/rfqs/:id', deleteAdminRfq);
 router.get('/tokens', listAdminTokens);
 router.post('/tokens/:id/disable', disableAdminToken);

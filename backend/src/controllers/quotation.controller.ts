@@ -62,14 +62,6 @@ const logAccessAttempt = async (
   }
 };
 
-const ensureEnv = (key: string): string => {
-  const value = process.env[key];
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${key}`);
-  }
-  return value;
-};
-
 const normalizeMethod = (method: unknown): QuoteMethod | null => {
   if (typeof method !== 'string') return null;
   const upper = method.trim().toUpperCase();
@@ -228,6 +220,7 @@ export const submitQuotationFromSecureLink: RequestHandler = async (req, res) =>
 
     const pdfBuffer = await renderQuotationPdf({
       rfqPublicId,
+      requestingCompanyName: rfq.company,
       vendorName,
       vendorContact: { name: contactName, email: contactEmail, phone: contactPhone },
       currency,
@@ -236,11 +229,9 @@ export const submitQuotationFromSecureLink: RequestHandler = async (req, res) =>
       logoDataUrl: toDataUrl(req.file as Express.Multer.File | undefined),
     });
 
-    const quotationsRootFolderId = ensureEnv('DRIVE_QUOTATIONS_FOLDER_ID');
     const folder = await ensureQuotationsRfqFolder({
-      quotationsRootFolderId,
       rfqPublicId,
-      rfqCompany: rfq.company,
+      vendorName,
     });
 
     const fileName = `Quotation_${rfqPublicId}.pdf`;
@@ -256,8 +247,25 @@ export const submitQuotationFromSecureLink: RequestHandler = async (req, res) =>
       data: {
         rfqId: updatedSecureLink.rfqId,
         vendorName,
-        quotationLink: uploadResult.fileUrl,
+        contactName: contactName || undefined,
+        contactEmail: contactEmail || undefined,
+        contactPhone: contactPhone || undefined,
+        currency,
+        notes: notes || undefined,
+        quotationLink: uploadResult.webViewLink,
+        driveFileId: uploadResult.driveFileId,
+        driveFolderId: folder.id,
         method,
+        status: 'RECEIVED',
+        lines: {
+          create: pdfItems.map((item) => ({
+            name: item.name,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            lineTotal: item.lineTotal,
+            details: item.details ?? undefined,
+          })),
+        },
       },
     });
 

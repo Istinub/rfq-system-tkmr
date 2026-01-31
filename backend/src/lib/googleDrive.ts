@@ -19,6 +19,7 @@ let cachedConfig:
       clientSecret: string;
       refreshToken: string;
       folderId: string;
+      quotationsFolderId: string;
     }
   | null = null;
 
@@ -32,6 +33,7 @@ const getDriveConfig = () => {
     clientSecret: requireEnv('DRIVE_CLIENT_SECRET'),
     refreshToken: requireEnv('DRIVE_REFRESH_TOKEN'),
     folderId: requireEnv('DRIVE_FOLDER_ID'),
+    quotationsFolderId: requireEnv('DRIVE_QUOTATIONS_FOLDER_ID'),
   };
 
   return cachedConfig;
@@ -64,3 +66,5 @@ export const getDrive = (): drive_v3.Drive => {
 };
 
 export const getDriveRootFolderId = (): string => getDriveConfig().folderId;
+
+export const getDriveQuotationsFolderId = (): string => getDriveConfig().quotationsFolderId;

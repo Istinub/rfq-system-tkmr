@@ -1,13 +1,7 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider      = "prisma-client-js"
-  engineType    = "library"
   binaryTargets = ["native"]
+  engineType    = "library"
 }
 
 datasource db {
@@ -15,23 +9,22 @@ datasource db {
 }
 
 model RFQ {
-  id                 String          @id @default(cuid())
-  rfqNo              Int             @unique @default(autoincrement())
-  publicId           String?         @unique
+  id                 String                @id @default(cuid())
   company            String
   contactName        String
   contactEmail       String
   contactPhone       String?
-  submittedByType    SubmittedByType @default(ADMIN)
+  createdAt          DateTime              @default(now())
+  rfqNo              Int                   @unique @default(autoincrement())
+  publicId           String?               @unique
   submittedByTokenId String?
-  createdAt          DateTime        @default(now())
-
-  items            RFQItem[]
-  attachments      Attachment[]
-  quotations       Quotation[]
-  secureLinks      SecureLink[]
-  accessLogs       SecureLinkAccessLog[]
-  submittedByToken SubmissionToken?      @relation(fields: [submittedByTokenId], references: [id], onDelete: SetNull)
+  submittedByType    SubmittedByType       @default(ADMIN)
+  attachments        Attachment[]
+  quotations         Quotation[]
+  submittedByToken   SubmissionToken?      @relation(fields: [submittedByTokenId], references: [id])
+  items              RFQItem[]
+  secureLinks        SecureLink[]
+  accessLogs         SecureLinkAccessLog[]
 }
 
 model RFQItem {
@@ -40,8 +33,7 @@ model RFQItem {
   name     String
   quantity Int
   details  String?
-
-  rfq RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  rfq      RFQ     @relation(fields: [rfqId], references: [id], onDelete: Cascade)
 }
 
 model Attachment {
@@ -51,37 +43,63 @@ model Attachment {
   fileUrl     String
   fileSize    Int?
   driveFileId String?
-
-  rfq RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  rfq         RFQ     @relation(fields: [rfqId], references: [id], onDelete: Cascade)
 }
 
 model Quotation {
   id             String      @id @default(cuid())
   rfqId          String
   vendorName     String
+  contactName    String?
+  contactEmail   String?
+  contactPhone   String?
+  currency       String      @default("USD")
+  notes          String?
   quotationLink  String
+  driveFileId    String?
+  driveFolderId  String?
   method         QuoteMethod @default(FORM)
+  status         QuotationStatus @default(RECEIVED)
   createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
   rfq RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+
+  lines QuotationLine[]
 
   @@index([rfqId])
 }
 
+
+model QuotationLine {
+  id           String   @id @default(cuid())
+  quotationId  String
+  name         String
+  quantity     Int
+  unitPrice    Float
+  lineTotal    Float
+  details      String?
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@index([quotationId])
+}
+
+
+
 model SecureLink {
-  id            String    @id @default(cuid())
-  token         String    @unique
+  id            String                @id @default(cuid())
+  token         String                @unique
   rfqId         String
-  createdAt     DateTime  @default(now())
+  createdAt     DateTime              @default(now())
   expiresAt     DateTime
   firstAccessAt DateTime?
-  oneTime       Boolean   @default(false)
-  accessCount   Int       @default(0)
+  oneTime       Boolean               @default(false)
+  accessCount   Int                   @default(0)
   lastAccessIP  String?
-  disabled      Boolean   @default(false)
-
-  rfq  RFQ                   @relation(fields: [rfqId], references: [id], onDelete: Cascade)
-  logs SecureLinkAccessLog[]
+  disabled      Boolean               @default(false)
+  rfq           RFQ                   @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  logs          SecureLinkAccessLog[]
 }
 
 model SecureLinkAccessLog {
@@ -93,9 +111,8 @@ model SecureLinkAccessLog {
   ip           String?
   userAgent    String?
   createdAt    DateTime     @default(now())
-
-  secureLink SecureLink? @relation(fields: [secureLinkId], references: [id], onDelete: SetNull)
-  rfq        RFQ?        @relation(fields: [rfqId], references: [id], onDelete: SetNull)
+  rfq          RFQ?         @relation(fields: [rfqId], references: [id])
+  secureLink   SecureLink?  @relation(fields: [secureLinkId], references: [id])
 }
 
 model AdminSetting {
@@ -116,8 +133,7 @@ model SubmissionToken {
   uses      Int       @default(0)
   createdAt DateTime  @default(now())
   revokedAt DateTime?
-
-  rfqs RFQ[]
+  rfqs      RFQ[]
 }
 
 enum AccessResult {
@@ -134,5 +150,12 @@ enum SubmittedByType {
 
 enum QuoteMethod {
   FORM
-  MANUAL_EMAIL
+}
+
+enum QuotationStatus {
+  RECEIVED
+  REVISED
+  APPROVED
+  REJECTED
+  CUSTOMER_ACCEPTED
 }

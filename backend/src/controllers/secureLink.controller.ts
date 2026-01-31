@@ -88,6 +88,7 @@ const logAccessAttempt = async (
 
 const serializeRfq = (rfq: SecureLinkRFQ) => ({
   id: rfq.id,
+  publicId: rfq.publicId ?? null,
   company: rfq.company,
   contactName: rfq.contactName,
   contactEmail: rfq.contactEmail,

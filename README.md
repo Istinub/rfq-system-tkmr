@@ -74,8 +74,16 @@ DRIVE_CLIENT_ID=your-google-client-id
 DRIVE_CLIENT_SECRET=your-google-client-secret
 DRIVE_REFRESH_TOKEN=your-drive-refresh-token
 DRIVE_FOLDER_ID=your-drive-folder-id
+DRIVE_OAUTH_REDIRECT_URI=http://localhost:3000/oauth2callback
+DRIVE_OAUTH_LOCAL_PORT=3000
 DRIVE_PUBLIC_FILES=false
 REDIS_URL= # optional, used for Redis client/rate limit store (not mounted by default)
+```
+
+### Frontend environment (frontend/.env.development)
+```env
+VITE_BACKEND_ORIGIN=http://localhost:5000
+# VITE_BACKEND_ORIGIN=https://<your-codespace>-5000.app.github.dev
 ```
 
 ### Run in development
@@ -83,6 +91,9 @@ REDIS_URL= # optional, used for Redis client/rate limit store (not mounted by de
 # Backend (port 5000)
 cd backend
 npm run dev
+
+# Optional: generate Drive refresh token (uses DRIVE_OAUTH_REDIRECT_URI)
+npm run drive:token
 
 # Frontend (port 9000, proxies /api to 5000)
 cd ../frontend

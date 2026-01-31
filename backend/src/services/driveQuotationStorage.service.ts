@@ -1,17 +1,34 @@
 import { PassThrough } from 'stream';
-import { getDrive } from '../lib/googleDrive.js';
-import { buildRfqFolderName, ensureFolder } from './driveRfqStorage.service.js';
+import { getDrive, getDriveQuotationsFolderId } from '../lib/googleDrive.js';
+import { ensureFolder, sanitizeFolderName } from './driveRfqStorage.service.js';
 
 const PDF_MIME = 'application/pdf';
 
+export const buildQuotationFolderName = (publicId: string, vendorName: string): string => {
+  const sanitizedVendor = sanitizeFolderName(vendorName || 'vendor');
+  const displayId = publicId.trim() || 'RFQ';
+  return `${displayId}__${sanitizedVendor}`.slice(0, 120);
+};
+
+const formatTimestamp = (date: Date): string => {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  return `${year}${month}${day}-${hours}${minutes}`;
+};
+
 export const ensureQuotationsRfqFolder = async (args: {
-  quotationsRootFolderId: string;
   rfqPublicId: string;
-  rfqCompany: string;
+  vendorName: string;
+  quotationsRootFolderId?: string;
 }): Promise<{ id: string; name: string }> => {
-  const { quotationsRootFolderId, rfqPublicId, rfqCompany } = args;
-  const folderName = buildRfqFolderName(rfqCompany, new Date(), rfqPublicId);
-  return ensureFolder(quotationsRootFolderId, folderName);
+  const { rfqPublicId, vendorName, quotationsRootFolderId } = args;
+  const rootFolderId = quotationsRootFolderId || getDriveQuotationsFolderId();
+  const folderName = buildQuotationFolderName(rfqPublicId, vendorName);
+  return ensureFolder(rootFolderId, folderName);
 };
 
 export const uploadPdfBufferToFolder = async (args: {
@@ -19,7 +36,7 @@ export const uploadPdfBufferToFolder = async (args: {
   fileName: string;
   pdfBuffer: Buffer;
   makePublic?: boolean;
-}): Promise<{ driveFileId: string; fileUrl: string; fileName: string; fileSize?: number }> => {
+}): Promise<{ driveFileId: string; webViewLink: string; fileName: string; size?: number }> => {
   const { folderId, fileName, pdfBuffer, makePublic } = args;
   const drive = getDrive();
 
@@ -43,7 +60,7 @@ export const uploadPdfBufferToFolder = async (args: {
     throw new Error('Drive upload did not return file id');
   }
 
-  const fileUrl = data.webViewLink || data.webContentLink || `https://drive.google.com/file/d/${data.id}/view`;
+  const webViewLink = data.webViewLink || data.webContentLink || `https://drive.google.com/file/d/${data.id}/view`;
 
   if (makePublic) {
     try {
@@ -69,8 +86,36 @@ export const uploadPdfBufferToFolder = async (args: {
 
   return {
     driveFileId: data.id,
-    fileUrl,
+    webViewLink,
     fileName: data.name || fileName,
-    fileSize: data.size ? Number(data.size) : pdfBuffer.byteLength,
+    size: data.size ? Number(data.size) : pdfBuffer.byteLength,
+  };
+};
+
+export const storeQuotationPdfToDrive = async (args: {
+  publicId: string;
+  vendorName: string;
+  pdfBuffer: Buffer;
+}): Promise<{ folderId: string; driveFileId: string; fileName: string; webViewLink: string; size?: number }> => {
+  const { publicId, vendorName, pdfBuffer } = args;
+  const rootFolderId = getDriveQuotationsFolderId();
+  const folderName = buildQuotationFolderName(publicId, vendorName);
+  const folder = await ensureFolder(rootFolderId, folderName);
+  const fileName = `Quotation_${formatTimestamp(new Date())}.pdf`;
+  const makePublic = process.env.DRIVE_PUBLIC_FILES === 'true';
+
+  const uploadResult = await uploadPdfBufferToFolder({
+    folderId: folder.id,
+    fileName,
+    pdfBuffer,
+    makePublic,
+  });
+
+  return {
+    folderId: folder.id,
+    driveFileId: uploadResult.driveFileId,
+    fileName: uploadResult.fileName,
+    webViewLink: uploadResult.webViewLink,
+    size: uploadResult.size,
   };
 };

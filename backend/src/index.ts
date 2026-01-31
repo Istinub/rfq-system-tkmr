@@ -4,6 +4,7 @@ import cors, { type CorsOptions } from 'cors';
 
 import healthRouter from './routes/health.routes.js';
 import secureLinkRouter from './routes/secureLink.routes.js';
+import quotationRouter from './routes/quotation.routes.js';
 import rfqRouter from './routes/rfq.routes.js';
 import { rfqByTokenRouter } from './routes/rfq.byToken.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -105,6 +106,7 @@ app.use('/health', healthRouter);
 app.use('/api/rfq/by-token', rfqByTokenRouter);
 app.use('/api/rfq', rfqRouter);
 app.use('/api/secure-link', secureLinkRouter);
+app.use('/api/secure-links', quotationRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/drive', driveRouter);
 

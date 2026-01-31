@@ -8,6 +8,8 @@ import { useAdminRedirectGuard } from '../composables/admin/useAdminRedirectGuar
 const AdminDashboardPage = () => import('../pages/admin/Dashboard.vue');
 const AdminRfqsPage = () => import('../pages/admin/Rfqs.vue');
 const AdminRfqDetailsPage = () => import('../pages/admin/RfqDetails.vue');
+const AdminQuotationsPage = () => import('../pages/admin/Quotations.vue');
+const AdminQuotationDetailsPage = () => import('../pages/admin/QuotationDetails.vue');
 const AdminTokensPage = () => import('../pages/admin/Tokens.vue');
 const AdminSubmissionTokensPage = () => import('../pages/admin/SubmissionTokens.vue');
 const AdminLogsPage = () => import('../pages/admin/Logs.vue');
@@ -61,6 +63,16 @@ const routes: RouteRecordRaw[] = [
         path: 'rfqs/:id',
         name: 'admin-rfq-details',
         component: AdminRfqDetailsPage,
+      },
+      {
+        path: 'quotations',
+        name: 'admin-quotations',
+        component: AdminQuotationsPage,
+      },
+      {
+        path: 'quotations/:id',
+        name: 'admin-quotation-details',
+        component: AdminQuotationDetailsPage,
       },
       {
         path: 'tokens',

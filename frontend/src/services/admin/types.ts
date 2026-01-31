@@ -127,3 +127,47 @@ export interface AdminSettings {
   oneTimeAccess: boolean;
   rateLimitPerMinute?: number;
 }
+
+export type AdminQuotationStatus = 'RECEIVED' | 'REVISED' | 'APPROVED' | 'REJECTED' | 'CUSTOMER_ACCEPTED';
+
+export interface AdminQuotationLine {
+  id: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  details?: string | null;
+}
+
+export interface AdminQuotationSummary {
+  id: string;
+  rfq: { publicId?: string | null; company: string };
+  vendorName: string;
+  quotationLink: string;
+  currency: string;
+  status: AdminQuotationStatus;
+  method: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminQuotationDetails extends AdminQuotationSummary {
+  contactName?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  notes?: string | null;
+  driveFileId?: string | null;
+  driveFolderId?: string | null;
+  lines: AdminQuotationLine[];
+}
+
+export interface AdminQuotationUpdateRequest {
+  vendorName?: string;
+  contactName?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  currency?: string;
+  notes?: string | null;
+  status?: AdminQuotationStatus;
+  lines?: Array<{ id: string; unitPrice: number }>;
+}

@@ -10,21 +10,25 @@ export type QuotationItem = {
 
 export const renderQuotationPdf = async (args: {
   rfqPublicId: string;
+  requestingCompanyName: string;
   vendorName: string;
   vendorContact?: { name?: string; email?: string; phone?: string };
   currency?: string;
   items: QuotationItem[];
   notes?: string;
   logoDataUrl?: string;
+  status?: 'RECEIVED' | 'REVISED' | 'APPROVED' | 'REJECTED' | 'CUSTOMER_ACCEPTED';
 }): Promise<Buffer> => {
   const {
     rfqPublicId,
+    requestingCompanyName,
     vendorName,
     vendorContact,
     currency = 'USD',
     items,
     notes,
     logoDataUrl,
+    status,
   } = args;
 
   const escapeHtml = (value: string | undefined | null): string => {
@@ -38,6 +42,7 @@ export const renderQuotationPdf = async (args: {
   };
 
   const formatCurrency = (value: number): string => `${currency} ${value.toFixed(2)}`;
+  const safeRequestingCompany = escapeHtml(requestingCompanyName);
   const safeVendorName = escapeHtml(vendorName);
   const safeNotes = escapeHtml(notes);
   const contactLines = [vendorContact?.name, vendorContact?.email, vendorContact?.phone]
@@ -87,14 +92,13 @@ export const renderQuotationPdf = async (args: {
   <body>
     <div class="header">
       <div>
-        <div class="vendor">${safeVendorName}</div>
-        <div style="font-size:12px;color:#555;">Quotation for RFQ ${escapeHtml(rfqPublicId)}</div>
+        <div class="vendor">Quotation for ${safeRequestingCompany}</div>
+        <div style="font-size:12px;color:#555;">${safeVendorName}</div>
       </div>
       ${logoDataUrl ? `<img class="logo" src="${logoDataUrl}" alt="logo" />` : ''}
     </div>
 
     <div class="meta">
-      <div><strong>RFQ ID:</strong> ${escapeHtml(rfqPublicId)}</div>
       ${contactLines.map((line) => `<div>${line}</div>`).join('')}
     </div>
 
@@ -119,7 +123,8 @@ export const renderQuotationPdf = async (args: {
 
     ${safeNotes ? `<div class="notes"><strong>Notes:</strong><br/>${safeNotes}</div>` : ''}
 
-    <div class="footer">Generated for RFQ ${escapeHtml(rfqPublicId)}</div>
+    ${status === 'APPROVED' ? '<div style="margin-top: 20px; font-size: 12px; color: #555;">Approved by TKMR</div>' : ''}
+    <div class="footer">Generated for ${escapeHtml(rfqPublicId)}</div>
   </body>
 </html>`;
 

@@ -12,6 +12,9 @@ import type {
   AdminSubmissionTokenCreateRequest,
   AdminSubmissionTokenCreateResponse,
   AdminSubmissionTokenUpdateRequest,
+  AdminQuotationDetails,
+  AdminQuotationSummary,
+  AdminQuotationUpdateRequest,
 } from './types';
 
 export const ADMIN_API_KEY_STORAGE_KEY = 'ADMIN_API_KEY';
@@ -90,6 +93,14 @@ export const getSettings = () => unwrap<AdminSettings>(adminApiClient.get('/sett
 export const updateSettings = (payload: AdminSettings) => unwrap<AdminSettings>(adminApiClient.post('/settings', payload));
 export const generateSecureLink = (rfqId: string | number) =>
   unwrap<{ secureLink: AdminSecureLinkMeta }>(secureLinkApiClient.post(`/secure-link/${rfqId}`));
+export const getQuotations = () => unwrap<AdminQuotationSummary[]>(adminApiClient.get('/quotations'));
+export const getQuotation = (id: string) => unwrap<AdminQuotationDetails>(adminApiClient.get(`/quotations/${id}`));
+export const updateQuotation = (id: string, payload: AdminQuotationUpdateRequest) =>
+  unwrap<AdminQuotationDetails>(adminApiClient.patch(`/quotations/${id}`, payload));
+export const regenerateQuotationPdf = (id: string) =>
+  unwrap<AdminQuotationDetails>(adminApiClient.post(`/quotations/${id}/regenerate-pdf`));
+export const deleteQuotation = (id: string) =>
+  unwrap<{ message: string }>(adminApiClient.delete(`/quotations/${id}`));
 
 export const listSubmissionTokens = async () => {
   const { data } = await adminApiClient.get<unknown>('/submission-tokens');

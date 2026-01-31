@@ -2,10 +2,13 @@ import axios, { type AxiosError } from 'axios';
 import { z } from 'zod';
 import {
   RFQSchema,
+  type RFQ,
   type RFQRequest,
   CreateRFQResponseSchema,
   type CreateRFQResponse,
 } from '@rfq-system/shared';
+import { ADMIN_API_KEY_STORAGE_KEY } from './admin/adminApi';
+import type { AdminQuotationDetails, AdminQuotationUpdateRequest } from './admin/types';
 
 // ======================
 // Types
@@ -37,6 +40,11 @@ const apiClient = axios.create({
 
 apiClient.defaults.headers.common.Accept = 'application/json';
 
+const adminHeaders = () => {
+  const key = (localStorage.getItem(ADMIN_API_KEY_STORAGE_KEY) ?? '').trim();
+  return key ? { 'x-api-key': key } : {};
+};
+
 // ======================================
 // Secure Link Metadata Schema
 // ======================================
@@ -57,7 +65,10 @@ const SecureLinkDetailsResponseSchema = z.object({
 });
 
 export type SecureLinkMetadata = z.infer<typeof SecureLinkMetadataSchema>;
-export type SecureLinkDetailsResponse = z.infer<typeof SecureLinkDetailsResponseSchema>;
+export type SecureLinkDetailsResponse = {
+  rfq: RFQ;
+  secureLink: SecureLinkMetadata;
+};
 
 // ======================================
 // Error Extraction
@@ -262,6 +273,44 @@ export const submitQuotation = async (
   );
 
   return data as { quotation: { quotationLink: string; vendorName: string; method: string; createdAt: string } };
+};
+
+// ======================================
+// Admin Quotation Helpers
+// ======================================
+export const adminUpdateQuotation = async (
+  id: string,
+  payload: AdminQuotationUpdateRequest
+): Promise<AdminQuotationDetails> => {
+  const { data } = await apiClient.patch(`/admin/quotations/${id}`, payload, {
+    headers: adminHeaders(),
+  });
+  return data;
+};
+
+export const adminDeleteQuotation = async (id: string): Promise<{ message: string }> => {
+  const { data } = await apiClient.delete(`/admin/quotations/${id}`, {
+    headers: adminHeaders(),
+  });
+  return data;
+};
+
+export const adminUpdateQuotationStatus = async (
+  id: string,
+  status: 'APPROVED' | 'REJECTED' | 'CUSTOMER_ACCEPTED',
+  reason?: string
+): Promise<{
+  updated: true;
+  quotation: AdminQuotationDetails;
+  emailed: { vendor: boolean; rfqContact: boolean };
+  emailedWarning?: { message: string } | null;
+}> => {
+  const { data } = await apiClient.patch(
+    `/admin/quotations/${id}/status`,
+    { status, reason },
+    { headers: adminHeaders() }
+  );
+  return data;
 };
 
 export default apiClient;
