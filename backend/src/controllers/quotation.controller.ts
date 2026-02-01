@@ -65,7 +65,7 @@ const logAccessAttempt = async (
 const normalizeMethod = (method: unknown): QuoteMethod | null => {
   if (typeof method !== 'string') return null;
   const upper = method.trim().toUpperCase();
-  return upper === 'FORM' || upper === 'MANUAL_EMAIL' ? (upper as QuoteMethod) : null;
+  return upper === 'FORM' ? (upper as QuoteMethod) : null;
 };
 
 const toDataUrl = (file: Express.Multer.File | undefined): string | undefined => {
@@ -152,12 +152,46 @@ export const submitQuotationFromSecureLink: RequestHandler = async (req, res) =>
 
     const lines = parseLines(req.body?.lines);
 
+    const parseAdjustments = (
+      raw: unknown
+    ): Array<{ label: string; amount: number; type: 'CHARGE' | 'DISCOUNT' }> | null => {
+      if (!raw) return null;
+      let candidate: unknown = raw;
+      if (typeof raw === 'string') {
+        try {
+          candidate = JSON.parse(raw);
+        } catch {
+          return null;
+        }
+      }
+
+      if (!Array.isArray(candidate)) return null;
+
+      const parsed: Array<{ label: string; amount: number; type: 'CHARGE' | 'DISCOUNT' }> = [];
+      for (const entry of candidate) {
+        const label = typeof entry?.label === 'string' ? entry.label.trim() : '';
+        const amount = Number((entry as { amount?: unknown })?.amount);
+        const typeRaw = typeof entry?.type === 'string' ? entry.type.trim().toUpperCase() : '';
+        const type = typeRaw === 'CHARGE' || typeRaw === 'DISCOUNT' ? (typeRaw as 'CHARGE' | 'DISCOUNT') : null;
+
+        if (!label || !Number.isFinite(amount) || amount <= 0 || !type) {
+          continue;
+        }
+
+        parsed.push({ label, amount, type });
+      }
+
+      return parsed.length > 0 ? parsed : null;
+    };
+
+    const adjustments = parseAdjustments(req.body?.adjustments);
+
     if (!vendorName) {
       return res.status(400).json({ error: 'vendorName is required' });
     }
 
     if (!method) {
-      return res.status(400).json({ error: 'method must be FORM or MANUAL_EMAIL' });
+      return res.status(400).json({ error: 'method must be FORM' });
     }
 
     const now = new Date();
@@ -173,20 +207,6 @@ export const submitQuotationFromSecureLink: RequestHandler = async (req, res) =>
 
     const rfq = updatedSecureLink.rfq;
     const rfqPublicId = rfq.publicId ?? String(rfq.rfqNo ?? rfq.id);
-
-    if (method === 'MANUAL_EMAIL') {
-      const quotation = await prismaClient.quotation.create({
-        data: {
-          rfqId: updatedSecureLink.rfqId,
-          vendorName,
-          quotationLink: 'MANUAL_EMAIL',
-          method,
-        },
-      });
-
-      result = 'success';
-      return res.status(201).json({ quotation });
-    }
 
     if (!lines || !lines.length) {
       return res.status(400).json({ error: 'lines are required for FORM submissions' });
@@ -227,6 +247,7 @@ export const submitQuotationFromSecureLink: RequestHandler = async (req, res) =>
       items: pdfItems,
       notes,
       logoDataUrl: toDataUrl(req.file as Express.Multer.File | undefined),
+      status: 'RECEIVED',
     });
 
     const folder = await ensureQuotationsRfqFolder({
@@ -252,6 +273,7 @@ export const submitQuotationFromSecureLink: RequestHandler = async (req, res) =>
         contactPhone: contactPhone || undefined,
         currency,
         notes: notes || undefined,
+        adjustments: adjustments ?? null,
         quotationLink: uploadResult.webViewLink,
         driveFileId: uploadResult.driveFileId,
         driveFolderId: folder.id,

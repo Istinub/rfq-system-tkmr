@@ -55,6 +55,7 @@ model Quotation {
   contactPhone   String?
   currency       String      @default("USD")
   notes          String?
+  adjustments    Json?
   quotationLink  String
   driveFileId    String?
   driveFolderId  String?

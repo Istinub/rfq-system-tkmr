@@ -9,8 +9,6 @@ import { buildQuotationFolderName, uploadPdfBufferToFolder } from '../services/d
 import { getDriveQuotationsFolderId } from '../lib/googleDrive.js';
 import { ensureFolder } from '../services/driveRfqStorage.service.js';
 import { getDrive } from '../lib/googleDrive.js';
-import { sendEmail } from '../services/mailer.js';
-import { sendEmail } from '../services/mailer.js';
 
 const RFQS_PER_MONTH_WINDOW = 6;
 
@@ -198,6 +196,8 @@ const buildRfqsPerMonth = (timestamps: Date[]) => {
   return Array.from(buckets.entries()).map(([month, count]) => ({ month, count }));
 };
 
+const buildQuotationsPerMonth = (timestamps: Date[]) => buildRfqsPerMonth(timestamps);
+
 const handleError = (res: Parameters<RequestHandler>[1], error: unknown) => {
   console.error(error);
   return res.status(500).json({ message: 'Internal server error' });
@@ -268,79 +268,6 @@ const serializeAdminQuotation = (
   };
 };
 
-type QuotationEmailContext = {
-  rfqPublicId: string;
-  rfqCompany: string;
-  quotationLink: string;
-};
-
-const buildEmailContent = (
-  kind: 'approved' | 'rejected' | 'customer-accepted',
-  context: QuotationEmailContext
-) => {
-  const { rfqPublicId, rfqCompany, quotationLink } = context;
-  const subject =
-    kind === 'approved'
-      ? `Quotation Available – ${rfqPublicId} (${rfqCompany})`
-      : kind === 'rejected'
-      ? `Quotation Update – ${rfqPublicId} (${rfqCompany})`
-      : `Quotation Accepted – ${rfqPublicId} (${rfqCompany})`;
-
-  const decisionLine =
-    kind === 'approved'
-      ? 'TKMR has approved a quotation for your RFQ.'
-      : kind === 'rejected'
-      ? 'Your quotation has been reviewed and was rejected by TKMR.'
-      : 'Customer has accepted the quotation.';
-
-  const text = [
-    'Hello,',
-    '',
-    decisionLine,
-    `RFQ Reference: ${rfqPublicId}`,
-    `Company: ${rfqCompany}`,
-    `Quotation link: ${quotationLink}`,
-    '',
-    'TKMR Marine & Offshore Engineering Pte. Ltd.',
-  ].join('\n');
-
-  return { subject, text };
-};
-
-const attemptSendEmail = async (
-  tag: string,
-  recipients: string[],
-  content: { subject: string; text: string },
-  meta: { quotationId: string; rfqPublicId: string }
-): Promise<{ warning?: { message: string } | null }> => {
-  if (recipients.length === 0) {
-    return { warning: null };
-  }
-
-  const result = await sendEmail({
-    to: recipients,
-    subject: content.subject,
-    text: content.text,
-  });
-
-  if (result.ok) {
-    return { warning: null };
-  }
-
-  if (result.skipped && result.error?.includes('No recipients')) {
-    return { warning: null };
-  }
-
-  const errorId = randomUUID();
-  console.error(`[${tag}]`, {
-    errorId,
-    quotationId: meta.quotationId,
-    rfqPublicId: meta.rfqPublicId,
-    message: result.error ?? 'Failed to send email',
-  });
-
-  return { warning: { message: result.error ?? 'Email failed to send.' } };
-};
 
 export const listAdminQuotationIndex: RequestHandler = async (_req, res) => {
   try {
@@ -423,50 +350,6 @@ const normalizeStatus = (value: unknown): Quotation['status'] | undefined => {
   return undefined;
 };
 
-const buildStatusEmail = (args: {
-  status: 'APPROVED' | 'REJECTED' | 'CUSTOMER_ACCEPTED';
-  rfqPublicId: string;
-  company: string;
-  quotationLink: string;
-  reason?: string;
-}) => {
-  const { status, rfqPublicId, company, quotationLink, reason } = args;
-  const subjectBase = `${rfqPublicId} (${company})`;
-
-  if (status === 'REJECTED') {
-    const reasonLine = reason ? `\nReason: ${reason}\n` : '';
-    return {
-      subject: `Quotation Update – ${subjectBase}`,
-      text:
-        `Your quotation has been reviewed and was rejected by TKMR.\n` +
-        `RFQ Reference: ${rfqPublicId}\nCompany: ${company}\n` +
-        `${reasonLine}` +
-        `Quotation Link: ${quotationLink}\n\n` +
-        `TKMR Marine & Offshore Engineering Pte. Ltd.`,
-    };
-  }
-
-  if (status === 'APPROVED') {
-    return {
-      subject: `Quotation Available – ${subjectBase}`,
-      text:
-        `TKMR has approved a quotation for your RFQ.\n` +
-        `RFQ Reference: ${rfqPublicId}\nCompany: ${company}\n` +
-        `Quotation Link: ${quotationLink}\n\n` +
-        `TKMR Marine & Offshore Engineering Pte. Ltd.`,
-    };
-  }
-
-  return {
-    subject: `Quotation Accepted – ${subjectBase}`,
-    text:
-      `Customer has accepted the quotation.\n` +
-      `RFQ Reference: ${rfqPublicId}\nCompany: ${company}\n` +
-      `Quotation Link: ${quotationLink}\n\n` +
-      `TKMR Marine & Offshore Engineering Pte. Ltd.`,
-  };
-};
-
 export const updateAdminQuotationStatus: RequestHandler = async (req, res) => {
   const id = ensureIdParam(req.params.id);
   if (!id) {
@@ -494,6 +377,14 @@ export const updateAdminQuotationStatus: RequestHandler = async (req, res) => {
       return res.status(404).json({ message: 'Quotation not found' });
     }
 
+    if ((status === 'APPROVED' || status === 'REJECTED') && quotation.status !== 'RECEIVED') {
+      return res.status(409).json({
+        message: status === 'APPROVED'
+          ? 'Only RECEIVED quotations can be approved'
+          : 'Only RECEIVED quotations can be rejected',
+      });
+    }
+
     const updated = await prisma.quotation.update({
       where: { id },
       data: { status },
@@ -503,63 +394,13 @@ export const updateAdminQuotationStatus: RequestHandler = async (req, res) => {
       },
     });
 
-    const rfqPublicId = quotation.rfq.publicId ?? 'RFQ Reference unavailable';
-    const emailTemplate = buildStatusEmail({
-      status: status as 'APPROVED' | 'REJECTED' | 'CUSTOMER_ACCEPTED',
-      rfqPublicId,
-      company: quotation.rfq.company,
-      quotationLink: quotation.quotationLink,
-      reason,
-    });
-
-    const vendorEmail = quotation.contactEmail?.trim() || '';
-    const rfqEmail = quotation.rfq.contactEmail?.trim() || '';
     const emailed = { vendor: false, rfqContact: false };
-    let emailedWarning: { message: string } | null = null;
-
-    const sendTo = async (targets: string[], tag: string) => {
-      const result = await sendEmail({
-        to: targets,
-        subject: emailTemplate.subject,
-        text: emailTemplate.text,
-      });
-
-      if (!result.ok) {
-        const errorId = randomUUID();
-        console.warn(`[${tag}] email skipped`, {
-          errorId,
-          message: result.error,
-        });
-        emailedWarning = { message: result.error || 'Email delivery failed.' };
-      }
-
-      return result.ok;
-    };
-
-    if (status === 'REJECTED') {
-      if (vendorEmail) {
-        emailed.vendor = await sendTo([vendorEmail], 'REJECTED');
-      } else {
-        emailedWarning = { message: 'Vendor email missing; no rejection email sent.' };
-      }
-    } else if (status === 'APPROVED') {
-      if (rfqEmail) {
-        emailed.rfqContact = await sendTo([rfqEmail], 'APPROVED');
-      } else {
-        emailedWarning = { message: 'RFQ contact email missing; no approval email sent.' };
-      }
-    } else {
-      const targets = [vendorEmail, rfqEmail].filter(Boolean);
-      if (targets.length > 0) {
-        const ok = await sendTo(targets, 'CUSTOMER_ACCEPTED');
-        emailed.vendor = Boolean(vendorEmail) && ok;
-        emailed.rfqContact = Boolean(rfqEmail) && ok;
-      } else {
-        emailedWarning = { message: 'No recipient emails available for customer accepted notice.' };
-      }
-    }
-
-    return res.json({ updated: true, quotation: serializeAdminQuotation(updated), emailed, emailedWarning });
+    return res.json({
+      updated: true,
+      quotation: serializeAdminQuotation(updated),
+      emailed,
+      emailedWarning: null,
+    });
   } catch (error) {
     const errorId = randomUUID();
     console.error('[PATCH /api/admin/quotations/:id/status]', {
@@ -790,6 +631,19 @@ export const approveAdminQuotation: RequestHandler = async (req, res) => {
   }
 
   try {
+    const existing = await prisma.quotation.findUnique({
+      where: { id },
+      select: { id: true, status: true },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ message: 'Quotation not found' });
+    }
+
+    if (existing.status !== 'RECEIVED') {
+      return res.status(409).json({ message: 'Only RECEIVED quotations can be approved' });
+    }
+
     const updated = await prisma.quotation.update({
       where: { id },
       data: { status: 'APPROVED' },
@@ -798,23 +652,7 @@ export const approveAdminQuotation: RequestHandler = async (req, res) => {
         lines: true,
       },
     });
-
-    const rfqPublicId = updated.rfq.publicId ?? 'RFQ';
-    const content = buildEmailContent('approved', {
-      rfqPublicId,
-      rfqCompany: updated.rfq.company,
-      quotationLink: updated.quotationLink,
-    });
-
-    const recipients = [updated.rfq.contactEmail ?? ''].filter(Boolean);
-    const emailResult = await attemptSendEmail(
-      'PATCH /api/admin/quotations/:id/approve',
-      recipients,
-      content,
-      { quotationId: id, rfqPublicId }
-    );
-
-    return res.json({ quotation: serializeAdminQuotation(updated), emailWarning: emailResult.warning ?? null });
+    return res.json({ quotation: serializeAdminQuotation(updated), emailWarning: null });
   } catch (error) {
     const errorId = randomUUID();
     console.error('[PATCH /api/admin/quotations/:id/approve]', {
@@ -836,6 +674,19 @@ export const rejectAdminQuotation: RequestHandler = async (req, res) => {
   }
 
   try {
+    const existing = await prisma.quotation.findUnique({
+      where: { id },
+      select: { id: true, status: true },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ message: 'Quotation not found' });
+    }
+
+    if (existing.status !== 'RECEIVED') {
+      return res.status(409).json({ message: 'Only RECEIVED quotations can be rejected' });
+    }
+
     const updated = await prisma.quotation.update({
       where: { id },
       data: { status: 'REJECTED' },
@@ -844,23 +695,7 @@ export const rejectAdminQuotation: RequestHandler = async (req, res) => {
         lines: true,
       },
     });
-
-    const rfqPublicId = updated.rfq.publicId ?? 'RFQ';
-    const content = buildEmailContent('rejected', {
-      rfqPublicId,
-      rfqCompany: updated.rfq.company,
-      quotationLink: updated.quotationLink,
-    });
-
-    const recipients = [updated.contactEmail ?? ''].filter(Boolean);
-    const emailResult = await attemptSendEmail(
-      'PATCH /api/admin/quotations/:id/reject',
-      recipients,
-      content,
-      { quotationId: id, rfqPublicId }
-    );
-
-    return res.json({ quotation: serializeAdminQuotation(updated), emailWarning: emailResult.warning ?? null });
+    return res.json({ quotation: serializeAdminQuotation(updated), emailWarning: null });
   } catch (error) {
     const errorId = randomUUID();
     console.error('[PATCH /api/admin/quotations/:id/reject]', {
@@ -890,23 +725,7 @@ export const markCustomerAcceptedAdminQuotation: RequestHandler = async (req, re
         lines: true,
       },
     });
-
-    const rfqPublicId = updated.rfq.publicId ?? 'RFQ';
-    const content = buildEmailContent('customer-accepted', {
-      rfqPublicId,
-      rfqCompany: updated.rfq.company,
-      quotationLink: updated.quotationLink,
-    });
-
-    const recipients = [updated.contactEmail ?? '', updated.rfq.contactEmail ?? ''].filter(Boolean);
-    const emailResult = await attemptSendEmail(
-      'PATCH /api/admin/quotations/:id/customer-accepted',
-      recipients,
-      content,
-      { quotationId: id, rfqPublicId }
-    );
-
-    return res.json({ quotation: serializeAdminQuotation(updated), emailWarning: emailResult.warning ?? null });
+    return res.json({ quotation: serializeAdminQuotation(updated), emailWarning: null });
   } catch (error) {
     const errorId = randomUUID();
     console.error('[PATCH /api/admin/quotations/:id/customer-accepted]', {
@@ -1024,6 +843,7 @@ export const regenerateAdminQuotationPdf: RequestHandler = async (req, res) => {
         details: line.details ?? undefined,
       })),
       notes: quotation.notes ?? undefined,
+      status: quotation.status,
     });
 
     const folderId = quotation.driveFolderId
@@ -1065,7 +885,17 @@ export const getAdminStats: RequestHandler = async (_req, res) => {
     const now = nowUtc();
     const monthsAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (RFQS_PER_MONTH_WINDOW - 1), 1));
 
-    const [totalRfqs, activeTokens, expiredTokens, disabledTokens, accessAggregate, recentRfqs] = await Promise.all([
+    const [
+      totalRfqs,
+      activeTokens,
+      expiredTokens,
+      disabledTokens,
+      accessAggregate,
+      recentRfqs,
+      totalQuotations,
+      quotationStatusGroups,
+      recentQuotations,
+    ] = await Promise.all([
       prisma.rFQ.count(),
       prisma.secureLink.count({ where: { disabled: false, expiresAt: { gt: now } } }),
       prisma.secureLink.count({ where: { disabled: false, expiresAt: { lte: now } } }),
@@ -1075,7 +905,34 @@ export const getAdminStats: RequestHandler = async (_req, res) => {
         where: { createdAt: { gte: monthsAgo } },
         select: { createdAt: true },
       }),
+      prisma.quotation.count(),
+      prisma.quotation.groupBy({
+        by: ['status'],
+        _count: { _all: true },
+      }),
+      prisma.quotation.findMany({
+        where: { createdAt: { gte: monthsAgo } },
+        select: { createdAt: true },
+      }),
     ]);
+
+    const statusLabels = [
+      'RECEIVED',
+      'REVISED',
+      'APPROVED',
+      'REJECTED',
+      'CUSTOMER_ACCEPTED',
+    ] as const;
+
+    const statusCounts = new Map<string, number>();
+    quotationStatusGroups.forEach((group) => {
+      statusCounts.set(group.status, group._count._all ?? 0);
+    });
+
+    const quotationsByStatus = statusLabels.map((label) => ({
+      label,
+      value: statusCounts.get(label) ?? 0,
+    }));
 
     return res.json({
       totalRfqs,
@@ -1083,6 +940,9 @@ export const getAdminStats: RequestHandler = async (_req, res) => {
       expiredTokens,
       totalAccesses: accessAggregate._sum.accessCount ?? 0,
       rfqsPerMonth: buildRfqsPerMonth(recentRfqs.map((record) => record.createdAt)),
+      totalQuotations,
+      quotationsByStatus,
+      quotationsPerMonth: buildQuotationsPerMonth(recentQuotations.map((record) => record.createdAt)),
       tokenUsageBreakdown: [
         { label: 'Active', value: activeTokens },
         { label: 'Expired', value: expiredTokens },

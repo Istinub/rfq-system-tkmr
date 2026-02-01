@@ -12,12 +12,25 @@ export interface TokenUsageBreakdownDatum {
   value: number;
 }
 
+export interface QuotationsPerMonthDatum {
+  month: string;
+  count: number;
+}
+
+export interface QuotationsByStatusDatum {
+  label: string;
+  value: number;
+}
+
 export interface AdminStatsResponse {
   totalRfqs: number;
   activeTokens: number;
   expiredTokens: number;
   totalAccesses: number;
   rfqsPerMonth: RfqsPerMonthDatum[];
+  totalQuotations: number;
+  quotationsByStatus: QuotationsByStatusDatum[];
+  quotationsPerMonth: QuotationsPerMonthDatum[];
   tokenUsageBreakdown: TokenUsageBreakdownDatum[];
 }
 

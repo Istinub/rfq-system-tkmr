@@ -34,7 +34,7 @@
           </template>
           <template #body-cell-status="props">
             <q-td :props="props">
-              <q-badge outline color="primary">{{ props.row.status }}</q-badge>
+              <q-badge outline :color="statusColor[props.row.status] || 'grey'">{{ props.row.status }}</q-badge>
             </q-td>
           </template>
           <template #body-cell-updatedAt="props">
@@ -80,6 +80,14 @@ const columns = [
   { name: 'updatedAt', label: 'Updated', field: 'updatedAt', align: 'left' },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'right' },
 ] as const satisfies QTableProps['columns'];
+
+const statusColor: Record<string, string> = {
+  RECEIVED: 'primary',
+  REVISED: 'orange',
+  APPROVED: 'positive',
+  REJECTED: 'negative',
+  CUSTOMER_ACCEPTED: 'teal',
+};
 
 const formatDate = (value?: string) => {
   if (!value) return '—';

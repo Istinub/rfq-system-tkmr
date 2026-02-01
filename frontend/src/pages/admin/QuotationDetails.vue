@@ -20,38 +20,45 @@
 
       <template v-else>
         <q-card class="detail-card">
-          <q-card-section class="row items-start justify-between">
-            <div>
-              <div class="text-h6">Quotation</div>
-              <div class="text-caption text-grey-6">
-                RFQ: {{ quotation.rfq.publicId || '—' }} · Company: {{ quotation.rfq.company }}
+          <q-card-section>
+            <div class="header-wrap">
+              <div class="header-left">
+                <div class="text-h6">Quotation</div>
+                <div class="text-caption text-grey-6">
+                  RFQ: {{ quotation.rfq.publicId || '—' }} · Company: {{ quotation.rfq.company }}
+                </div>
+              </div>
+              <div class="header-right">
+                <q-badge outline :color="statusConfig[quotation.status]?.color || 'grey'">
+                  {{ statusConfig[quotation.status]?.label || quotation.status }}
+                </q-badge>
+                <q-btn dense flat round no-caps color="primary" icon="open_in_new" :disable="!pdfUrl" :href="pdfUrl" target="_blank">
+                  <q-tooltip>Open in new tab</q-tooltip>
+                </q-btn>
+                <q-btn v-if="quotation?.status === 'RECEIVED'" size="md" dense no-caps unelevated color="positive" icon="check_circle" label="Approve" @click="confirmApprove" />
+                <q-btn v-if="quotation?.status === 'RECEIVED'" size="md" dense no-caps outline color="negative" icon="cancel" label="Reject" @click="confirmReject" />
+                <q-btn v-if="quotation?.status === 'APPROVED'" size="md" dense no-caps outline color="teal" icon="verified" label="Customer Accepted" @click="confirmCustomerAccepted" />
+                <q-btn-dropdown dense no-caps flat icon="more_vert">
+                  <q-list padding style="min-width: 180px">
+                    <q-item clickable v-close-popup @click="confirmDelete">
+                      <q-item-section class="text-negative">Delete quotation</q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-btn-dropdown>
               </div>
             </div>
-            <q-badge outline :color="statusConfig[quotation.status]?.color || 'grey'">
-              {{ statusConfig[quotation.status]?.label || quotation.status }}
-            </q-badge>
           </q-card-section>
 
           <q-separator />
 
-          <q-card-section>
+          <q-card-section class="q-pa-md">
             <q-banner v-if="!pdfUrl" dense class="bg-grey-2 text-grey-8">
               PDF preview is not available for this quotation.
             </q-banner>
-            <q-responsive v-else :ratio="16/9" style="min-height: 75vh;">
-              <iframe :src="pdfUrl" style="width: 100%; height: 75vh; border: 0;" />
-            </q-responsive>
+            <div v-else class="pdf-frame">
+              <iframe :src="pdfUrl" class="pdf-iframe" />
+            </div>
           </q-card-section>
-
-          <q-separator />
-
-          <q-card-actions align="right" class="q-gutter-sm">
-            <q-btn flat color="primary" label="Open in new tab" :disable="!pdfUrl" :href="pdfUrl" target="_blank" />
-            <q-btn color="primary" label="Approve" @click="confirmApprove" />
-            <q-btn outline color="negative" label="Reject" @click="confirmReject" />
-            <q-btn outline color="positive" label="Customer Accepted" @click="confirmCustomerAccepted" />
-            <q-btn outline color="negative" label="Delete" @click="confirmDelete" />
-          </q-card-actions>
         </q-card>
       </template>
     </div>
@@ -131,7 +138,7 @@ const confirmApprove = () => {
 const confirmReject = () => {
   $q.dialog({
     title: 'Reject quotation?',
-    message: 'This will email the vendor.',
+    message: 'Please notify vendor manually.',
     prompt: {
       model: '',
       type: 'textarea',
@@ -150,7 +157,7 @@ const confirmReject = () => {
 const confirmCustomerAccepted = () => {
   $q.dialog({
     title: 'Mark customer accepted?',
-    message: 'This will email both vendor and customer contact.',
+    message: 'Are you sure? You need to manually send this email to the Customer.',
     cancel: { label: 'Cancel', color: 'primary', flat: true },
     ok: { label: 'Confirm', color: 'positive' },
     persistent: true,
@@ -177,3 +184,51 @@ const confirmDelete = () => {
 
 onMounted(load);
 </script>
+
+<style scoped>
+.detail-card {
+  width: 100%;
+}
+
+.header-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.header-left {
+  min-width: 260px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+@media (min-width: 1024px) {
+  .header-right {
+    flex-wrap: nowrap;
+  }
+}
+
+.pdf-frame {
+  background: #f7f7f7;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  overflow: hidden;
+  height: calc(100vh - 260px);
+  min-height: 640px;
+}
+
+.pdf-iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+</style>
