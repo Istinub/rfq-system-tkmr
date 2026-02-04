@@ -1,10 +1,5 @@
 import { Router } from 'express';
 import multer from 'multer';
-import {
-  generateSecureLink,
-  invalidateSecureLink,
-  resolveSecureLinkByToken,
-} from '../controllers/secureLink.controller.js';
 import { submitQuotationFromSecureLink } from '../controllers/quotation.controller.js';
 
 const router = Router();
@@ -23,8 +18,5 @@ const uploadLogo = multer({
 });
 
 router.post('/:token/quotations', uploadLogo.single('logo'), submitQuotationFromSecureLink);
-router.get('/:token', resolveSecureLinkByToken);
-router.post('/:rfqId', generateSecureLink);
-router.post('/invalidate/:token', invalidateSecureLink);
 
 export default router;

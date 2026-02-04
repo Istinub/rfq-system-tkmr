@@ -50,27 +50,22 @@
             <q-card class="dashboard-card full-height">
               <q-card-section class="row items-center justify-between">
                 <div>
-                  <div class="text-h6">RFQs per Month</div>
-                  <div class="text-caption text-grey-6">Rolling submission trend</div>
+                  <div class="text-h6">RFQs &amp; Quotations per Month</div>
+                  <div class="text-caption text-grey-6">Rolling submission &amp; quotation trend</div>
                 </div>
               </q-card-section>
               <q-separator />
               <q-card-section>
-                <q-markup-table flat dense v-if="rfqsPerMonth.length">
-                  <thead>
-                    <tr>
-                      <th>Month</th>
-                      <th class="text-right">RFQs</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="item in rfqsPerMonth" :key="item.month">
-                      <td>{{ item.month }}</td>
-                      <td class="text-right">{{ formatNumber(item.count) }}</td>
-                    </tr>
-                  </tbody>
-                </q-markup-table>
-                <div v-else class="text-grey-6 text-center q-py-md">No RFQ data yet.</div>
+                <q-table
+                  v-if="monthlyActivityRows.length"
+                  flat
+                  dense
+                  hide-bottom
+                  :rows="monthlyActivityRows"
+                  :columns="monthlyColumns"
+                  row-key="month"
+                />
+                <div v-else class="text-grey-6 text-center q-py-md">No monthly activity recorded.</div>
               </q-card-section>
             </q-card>
           </div>
@@ -97,6 +92,34 @@
                   </q-item>
                 </q-list>
                 <div v-else class="text-grey-6 text-center q-py-md">No token activity recorded.</div>
+              </q-card-section>
+            </q-card>
+          </div>
+        </div>
+
+        <div class="row q-col-gutter-md">
+          <div class="col-12">
+            <q-card class="dashboard-card full-height">
+              <q-card-section class="row items-center justify-between">
+                <div>
+                  <div class="text-h6">Quotation Status Breakdown</div>
+                  <div class="text-caption text-grey-6">Share by status</div>
+                </div>
+              </q-card-section>
+              <q-separator />
+              <q-card-section>
+                <q-list separator v-if="quotationStatusDisplay.length">
+                  <q-item v-for="item in quotationStatusDisplay" :key="item.label">
+                    <q-item-section>
+                      <q-item-label class="text-weight-medium">{{ item.label }}</q-item-label>
+                      <q-item-label caption>{{ formatNumber(item.value) }}</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <div class="text-weight-bold">{{ item.percent }}%</div>
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+                <div v-else class="text-grey-6 text-center q-py-md">No quotation activity recorded.</div>
               </q-card-section>
             </q-card>
           </div>
@@ -131,6 +154,12 @@ const statCards = computed(() => {
       caption: 'All time',
     },
     {
+      key: 'quotations',
+      label: 'Total Quotations',
+      value: formatNumber(data?.totalQuotations),
+      caption: 'All time',
+    },
+    {
       key: 'active',
       label: 'Active secure links',
       value: formatNumber(data?.activeTokens),
@@ -152,10 +181,39 @@ const statCards = computed(() => {
 });
 
 const rfqsPerMonth = computed(() => stats.value?.rfqsPerMonth ?? []);
+const quotationsPerMonth = computed(() => stats.value?.quotationsPerMonth ?? []);
 const tokenUsageRaw = computed(() => stats.value?.tokenUsageBreakdown ?? []);
+const quotationsByStatusRaw = computed(() => stats.value?.quotationsByStatus ?? []);
+
+const monthlyActivityRows = computed(() => {
+  const rfqMap = new Map(rfqsPerMonth.value.map((item) => [item.month, item.count]));
+  const quotationMap = new Map(quotationsPerMonth.value.map((item) => [item.month, item.count]));
+  const months = new Set<string>([...rfqMap.keys(), ...quotationMap.keys()]);
+  const rows = Array.from(months).map((month) => ({
+    month,
+    rfqs: rfqMap.get(month) ?? 0,
+    quotations: quotationMap.get(month) ?? 0,
+  }));
+  return rows.sort((a, b) => a.month.localeCompare(b.month));
+});
+
+const monthlyColumns = [
+  { name: 'month', label: 'Month', field: 'month', align: 'left' as const },
+  { name: 'rfqs', label: 'RFQs', field: 'rfqs', align: 'right' as const },
+  { name: 'quotations', label: 'Quotations', field: 'quotations', align: 'right' as const },
+];
 
 const tokenUsageDisplay = computed(() => {
   const list = tokenUsageRaw.value;
+  const total = list.reduce((sum, item) => sum + (item.value || 0), 0);
+  return list.map((item) => ({
+    ...item,
+    percent: total ? Math.round((item.value / total) * 100) : 0,
+  }));
+});
+
+const quotationStatusDisplay = computed(() => {
+  const list = quotationsByStatusRaw.value;
   const total = list.reduce((sum, item) => sum + (item.value || 0), 0);
   return list.map((item) => ({
     ...item,

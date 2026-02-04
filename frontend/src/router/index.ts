@@ -8,7 +8,10 @@ import { useAdminRedirectGuard } from '../composables/admin/useAdminRedirectGuar
 const AdminDashboardPage = () => import('../pages/admin/Dashboard.vue');
 const AdminRfqsPage = () => import('../pages/admin/Rfqs.vue');
 const AdminRfqDetailsPage = () => import('../pages/admin/RfqDetails.vue');
+const AdminQuotationsPage = () => import('../pages/admin/Quotations.vue');
+const AdminQuotationDetailsPage = () => import('../pages/admin/QuotationDetails.vue');
 const AdminTokensPage = () => import('../pages/admin/Tokens.vue');
+const AdminSubmissionTokensPage = () => import('../pages/admin/SubmissionTokens.vue');
 const AdminLogsPage = () => import('../pages/admin/Logs.vue');
 const AdminSettingsPage = () => import('../pages/admin/Settings.vue');
 const AdminLoginPage = () => import('../pages/admin/Login.vue');
@@ -62,9 +65,24 @@ const routes: RouteRecordRaw[] = [
         component: AdminRfqDetailsPage,
       },
       {
+        path: 'quotations',
+        name: 'admin-quotations',
+        component: AdminQuotationsPage,
+      },
+      {
+        path: 'quotations/:id',
+        name: 'admin-quotation-details',
+        component: AdminQuotationDetailsPage,
+      },
+      {
         path: 'tokens',
         name: 'admin-tokens',
         component: AdminTokensPage,
+      },
+      {
+        path: 'submission-tokens',
+        name: 'admin-submission-tokens',
+        component: AdminSubmissionTokensPage,
       },
       {
         path: 'logs',

@@ -155,7 +155,9 @@ const { apiKey, isAuthenticated } = storeToRefs(auth);
 const navItems = [
   { label: 'Dashboard', icon: 'dashboard', to: '/admin/dashboard' },
   { label: 'RFQs', icon: 'assignment', to: '/admin/rfqs' },
+  { label: 'Quotations', icon: 'request_quote', to: '/admin/quotations' },
   { label: 'Tokens', icon: 'vpn_key', to: '/admin/tokens' },
+  { label: 'Submission Tokens', icon: 'key', to: '/admin/submission-tokens' },
   { label: 'Logs', icon: 'list_alt', to: '/admin/logs' },
   { label: 'Settings', icon: 'settings', to: '/admin/settings' },
 ];

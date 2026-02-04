@@ -3,7 +3,9 @@ import fs from 'fs';
 import http from 'http';
 import { google } from 'googleapis';
 
-const REDIRECT_URI = process.env.DRIVE_OAUTH_REDIRECT_URI || 'https://scaling-chainsaw-xpjqj5g9jvjfv49v-3000.app.github.dev/oauth2callback';
+const LOCAL_OAUTH_PORT = Number.parseInt(process.env.DRIVE_OAUTH_LOCAL_PORT ?? '', 10) || 3000;
+const DEFAULT_REDIRECT_URI = `http://localhost:${LOCAL_OAUTH_PORT}/oauth2callback`;
+const REDIRECT_URI = process.env.DRIVE_OAUTH_REDIRECT_URI || DEFAULT_REDIRECT_URI;
 const SCOPES = ['https://www.googleapis.com/auth/drive'];
 
 const credentialsPath = new URL('./client_secret.json', import.meta.url);
@@ -63,8 +65,8 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(3000, async () => {
-  console.log('Server listening on http://localhost:3000');
+server.listen(LOCAL_OAUTH_PORT, async () => {
+  console.log(`Server listening on http://localhost:${LOCAL_OAUTH_PORT}`);
 
   const authUrl = oAuth2Client.generateAuthUrl({
     access_type: 'offline',

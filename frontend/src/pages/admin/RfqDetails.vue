@@ -45,6 +45,67 @@
                   <div class="text-caption text-grey-5">{{ rfq.contactPhone || 'No phone provided' }}</div>
                 </div>
               </q-card-section>
+              <q-separator />
+              <q-card-section>
+                <div class="text-caption text-grey-6">Submitted By</div>
+                <div class="row items-center q-col-gutter-sm q-mt-xs">
+                  <q-badge :color="rfq.submittedByType === 'TOKEN' ? 'secondary' : 'primary'" outline>
+                    {{ rfq.submittedByType || 'ADMIN' }}
+                  </q-badge>
+                  <div v-if="rfq.submittedByType === 'TOKEN'" class="text-body2 font-mono">
+                    {{ tokenPreview(rfq.submittedByTokenId) }}
+                  </div>
+                </div>
+                <div
+                  v-if="rfq.submittedByType === 'TOKEN' && rfq.submittedByToken"
+                  class="text-caption text-grey-6 q-mt-sm column q-gutter-xs"
+                >
+                  <div>Expires: {{ formatDate(rfq.submittedByToken.expiresAt) }}</div>
+                  <div>Uses: {{ rfq.submittedByToken.uses ?? 0 }} / {{ rfq.submittedByToken.maxUses ?? '—' }}</div>
+                  <div v-if="rfq.submittedByToken.revokedAt">Revoked: {{ formatDate(rfq.submittedByToken.revokedAt) }}</div>
+                </div>
+              </q-card-section>
+            </q-card>
+
+            <q-card class="detail-card q-mt-md">
+              <q-card-section>
+                <div class="text-h6">TKMR Contact</div>
+                <div class="text-caption text-grey-6">Details shown to vendors on secure links</div>
+              </q-card-section>
+              <q-separator />
+              <q-card-section class="q-gutter-md">
+                <q-input
+                  v-model="tkmrContactForm.name"
+                  label="Name"
+                  dense
+                  outlined
+                />
+                <q-input
+                  v-model="tkmrContactForm.email"
+                  label="Email"
+                  type="email"
+                  dense
+                  outlined
+                />
+                <q-input
+                  v-model="tkmrContactForm.phone"
+                  label="Phone"
+                  dense
+                  outlined
+                />
+                <div v-if="tkmrContactMissing" class="text-caption text-warning">
+                  TKMR contact details are required before generating a secure link.
+                </div>
+              </q-card-section>
+              <q-card-actions align="right">
+                <q-btn
+                  color="primary"
+                  label="Save TKMR Contact"
+                  :loading="tkmrContactSaving"
+                  :disable="tkmrContactSaving"
+                  @click="handleSaveTkmrContact"
+                />
+              </q-card-actions>
             </q-card>
           </div>
 
@@ -117,7 +178,7 @@
                   color="primary"
                   label="Generate Secure Link"
                   :loading="generateLoading"
-                  :disable="generateLoading"
+                  :disable="generateLoading || tkmrContactMissing"
                   @click="handleGenerateSecureLink"
                 />
               </q-card-section>
@@ -192,12 +253,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { Notify } from 'quasar';
 import { useAdminRfqsStore } from '../../stores/admin/adminRfqs';
 import type { AdminAttachment } from '../../services/admin/types';
+import { updateRfqTkmrContact } from '../../services/admin/adminApi';
 
 const route = useRoute();
 const routeId = route.params.id as string;
@@ -254,9 +316,15 @@ const itemColumns: Array<{
   { name: 'details', label: 'Details', field: 'details', align: 'left' },
 ];
 
-const formatDate = (value?: string) => {
+const formatDate = (value?: string | null) => {
   if (!value) return '—';
   return new Date(value).toLocaleString();
+};
+
+const tokenPreview = (value: string | null | undefined) => {
+  if (!value) return '—';
+  if (value.length <= 8) return value;
+  return `${value.slice(0, 4)}…${value.slice(-4)}`;
 };
 
 const maskedToken = computed(() => {
@@ -274,6 +342,33 @@ const linkStatusClass = computed(() => {
 
 const actionLoading = ref(false);
 const generateLoading = ref(false);
+const tkmrContactSaving = ref(false);
+const tkmrContactForm = ref({
+  name: '',
+  email: '',
+  phone: '',
+});
+
+const tkmrContactMissing = computed(() => {
+  const { name, email, phone } = tkmrContactForm.value;
+  return !name.trim() || !email.trim() || !phone.trim();
+});
+
+watch(
+  rfq,
+  (next) => {
+    if (!next) {
+      tkmrContactForm.value = { name: '', email: '', phone: '' };
+      return;
+    }
+    tkmrContactForm.value = {
+      name: next.tkmrContactName ?? '',
+      email: next.tkmrContactEmail ?? '',
+      phone: next.tkmrContactPhone ?? '',
+    };
+  },
+  { immediate: true }
+);
 
 const openSecureLink = () => {
   if (!canOpenSecureLink.value || !secureLinkUrl.value) {
@@ -333,6 +428,32 @@ const handleGenerateSecureLink = async () => {
     // store handles notifications via handleAdminError
   } finally {
     generateLoading.value = false;
+  }
+};
+
+const handleSaveTkmrContact = async () => {
+  if (!rfq.value) return;
+  tkmrContactSaving.value = true;
+  try {
+    const { rfq: updated } = await updateRfqTkmrContact(rfq.value.id, {
+      name: tkmrContactForm.value.name,
+      email: tkmrContactForm.value.email,
+      phone: tkmrContactForm.value.phone,
+    });
+    if (currentRfq.value) {
+      currentRfq.value = {
+        ...currentRfq.value,
+        tkmrContactName: updated.tkmrContactName,
+        tkmrContactEmail: updated.tkmrContactEmail,
+        tkmrContactPhone: updated.tkmrContactPhone,
+      };
+    }
+    Notify.create({ type: 'positive', message: 'TKMR contact updated' });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to update TKMR contact.';
+    Notify.create({ type: 'negative', message });
+  } finally {
+    tkmrContactSaving.value = false;
   }
 };
 

@@ -2,6 +2,7 @@ import { Router, type RequestHandler } from 'express';
 import { randomUUID } from 'crypto';
 import multer, { MulterError } from 'multer';
 import { Prisma } from '@prisma/client';
+import { submissionOrAdminAuth } from '../middleware/submissionOrAdminAuth.js';
 import { createRFQ, createRFQMultipart, deleteRFQ, getRFQ, listRFQs } from '../controllers/rfq.controller.js';
 
 const storage = multer.memoryStorage();
@@ -48,10 +49,10 @@ const router = Router();
 
 router
   .route('/')
-  .post(createRFQ)
+  .post(submissionOrAdminAuth, createRFQ)
   .get(listRFQs);
 
-router.post('/multipart', handleMulter, async (req, res) => {
+router.post('/multipart', submissionOrAdminAuth, handleMulter, async (req, res) => {
   try {
     await createRFQMultipart(req, res, () => undefined);
   } catch (err) {

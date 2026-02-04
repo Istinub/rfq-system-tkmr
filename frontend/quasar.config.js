@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default configure(function () {
+  const backendOrigin = process.env.VITE_BACKEND_ORIGIN || 'http://localhost:5000';
+
   return {
     eslint: {
       warnings: false,
@@ -54,7 +56,7 @@ export default configure(function () {
 
       proxy: {
         '/api': {
-          target: 'http://localhost:5000',
+          target: backendOrigin,
           changeOrigin: true,
           secure: false,
         },
@@ -63,7 +65,7 @@ export default configure(function () {
 
     framework: {
       config: {},
-      plugins: ['Notify', 'Loading'],
+      plugins: ['Notify', 'Dialog', 'Loading'],
     },
 
     animations: [],

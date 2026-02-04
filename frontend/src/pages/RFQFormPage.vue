@@ -125,6 +125,27 @@
         </div>
       </div>
     </div>
+
+    <q-dialog v-model="tokenDialogOpen" persistent>
+      <q-card style="min-width: 360px; max-width: 480px;">
+        <q-card-section class="text-h6">Submission Token</q-card-section>
+        <q-card-section>
+          <div class="q-mb-sm">Enter your submission token to send this RFQ.</div>
+          <q-input
+            v-model="tokenValue"
+            label="Submission Token"
+            outlined
+            dense
+            autofocus
+            :rules="[(val) => (!!val && val.trim().length > 0) || 'Token is required']"
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" color="primary" @click="onTokenCancel" />
+          <q-btn unelevated label="Continue" color="primary" @click="onTokenContinue" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -192,6 +213,9 @@ const infoBtnRef = ref();
 const isSubmitting = ref(false);
 const submitStatusMessage = ref('');
 const activeSection = ref(baseSections[0].id);
+const tokenDialogOpen = ref(false);
+const tokenValue = ref('');
+const tokenResolver = ref<((value: string | null) => void) | null>(null);
 
 const createBlankItem = (): FormItem => ({
   id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
@@ -298,8 +322,46 @@ const handleExport = () => {
   });
 };
 
+const closeTokenDialog = (value: string | null) => {
+  tokenDialogOpen.value = false;
+  const resolver = tokenResolver.value;
+  tokenResolver.value = null;
+  resolver?.(value);
+};
+
+const onTokenCancel = () => {
+  closeTokenDialog(null);
+};
+
+const onTokenContinue = () => {
+  const trimmed = tokenValue.value.trim();
+  if (!trimmed) {
+    $q.notify({
+      type: 'warning',
+      message: 'Submission token is required.',
+      position: 'top',
+    });
+    return;
+  }
+  closeTokenDialog(trimmed);
+};
+
+const promptSubmissionToken = async (): Promise<string | null> => {
+  tokenValue.value = '';
+  tokenDialogOpen.value = true;
+
+  return new Promise((resolve) => {
+    tokenResolver.value = resolve;
+  });
+};
+
 const handleSubmit = async () => {
   if (isSubmitting.value) {
+    return;
+  }
+
+  const submissionToken = await promptSubmissionToken();
+  if (!submissionToken) {
     return;
   }
 
@@ -308,7 +370,7 @@ const handleSubmit = async () => {
 
   try {
     const formData = buildMultipartPayload();
-    const { rfq } = await createRFQMultipart(formData);
+    const { rfq } = await createRFQMultipart(formData, submissionToken);
     const rfqIdentifier = rfq.publicId;
 
 
@@ -327,7 +389,13 @@ const handleSubmit = async () => {
       (isApiError && error.status === 408) ||
       (typeof normalizedMessage === 'string' && normalizedMessage.includes('timed out'));
 
-    if (timedOut) {
+    if (isApiError && (error.status === 401 || error.status === 403)) {
+      $q.notify({
+        type: 'warning',
+        message: 'Invalid/expired token. Please contact TKMR.',
+        position: 'top',
+      });
+    } else if (timedOut) {
       $q.notify({
         type: 'warning',
         message:
@@ -397,8 +465,8 @@ const onExport = () => {
   handleExport();
 };
 
-const onSubmit = () => {
-  handleSubmit();
+const onSubmit = async () => {
+  await handleSubmit();
 };
 </script>
 

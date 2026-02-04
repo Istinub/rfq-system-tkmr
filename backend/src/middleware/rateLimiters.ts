@@ -82,3 +82,10 @@ export const secureLinkLimiter = createLimiter({
   limit: 20,
   message: 'Too many secure link requests from this IP. Please slow down.',
 });
+
+export const adminSubmissionTokenLimiter = createLimiter({
+  namespace: 'admin-submission-token',
+  windowMs: 60 * 1000,
+  limit: 30,
+  message: 'Too many submission token admin requests. Please slow down.',
+});

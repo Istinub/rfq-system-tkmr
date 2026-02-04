@@ -2,10 +2,13 @@ import axios, { type AxiosError } from 'axios';
 import { z } from 'zod';
 import {
   RFQSchema,
+  type RFQ,
   type RFQRequest,
   CreateRFQResponseSchema,
   type CreateRFQResponse,
 } from '@rfq-system/shared';
+import { ADMIN_API_KEY_STORAGE_KEY } from './admin/adminApi';
+import type { AdminQuotationDetails, AdminQuotationUpdateRequest } from './admin/types';
 
 // ======================
 // Types
@@ -37,6 +40,11 @@ const apiClient = axios.create({
 
 apiClient.defaults.headers.common.Accept = 'application/json';
 
+const adminHeaders = () => {
+  const key = (localStorage.getItem(ADMIN_API_KEY_STORAGE_KEY) ?? '').trim();
+  return key ? { 'x-api-key': key } : {};
+};
+
 // ======================================
 // Secure Link Metadata Schema
 // ======================================
@@ -57,7 +65,10 @@ const SecureLinkDetailsResponseSchema = z.object({
 });
 
 export type SecureLinkMetadata = z.infer<typeof SecureLinkMetadataSchema>;
-export type SecureLinkDetailsResponse = z.infer<typeof SecureLinkDetailsResponseSchema>;
+export type SecureLinkDetailsResponse = {
+  rfq: RFQ;
+  secureLink: SecureLinkMetadata;
+};
 
 // ======================================
 // Error Extraction
@@ -136,10 +147,16 @@ export const healthCheck = async (): Promise<HealthResponse> => {
 // { rfq: {...}, secureLink?: {...} }
 // ======================================
 export const createRFQ = async (
-  rfq: RFQRequest
+  rfq: RFQRequest,
+  submissionToken?: string
 ): Promise<CreateRFQResponse> => {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (submissionToken) {
+    headers['x-submit-token'] = submissionToken;
+  }
+
   const { data } = await apiClient.post('/rfq', rfq, {
-    headers: { 'Content-Type': 'application/json' },
+    headers,
   });
 
   const parsed = CreateRFQResponseSchema.safeParse(data);
@@ -156,10 +173,16 @@ export const createRFQ = async (
 };
 
 export const createRFQMultipart = async (
-  formData: FormData
+  formData: FormData,
+  submissionToken?: string
 ): Promise<CreateRFQResponse> => {
+  const headers: Record<string, string | undefined> = { 'Content-Type': undefined };
+  if (submissionToken) {
+    headers['x-submit-token'] = submissionToken;
+  }
+
   const { data } = await apiClient.post('/rfq/multipart', formData, {
-    headers: { 'Content-Type': undefined },
+    headers,
     timeout: 30000,
   });
 
@@ -202,6 +225,112 @@ export const getSecureLinkDetails = async (
   }
 
   return parsed.data;
+};
+
+// ======================================
+// Submit Quotation (Secure Link)
+// ======================================
+export type SubmitQuotationPayload = {
+  vendorName: string;
+  method?: 'FORM' | 'MANUAL_EMAIL';
+  currency?: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  notes?: string;
+  lines?: Array<{ rfqItemId: string; unitPrice: number }>;
+};
+
+export const submitQuotation = async (
+  token: string,
+  payload: SubmitQuotationPayload,
+  logoFile?: File | null
+): Promise<{ quotation: { quotationLink: string; vendorName: string; method: string; createdAt: string } }> => {
+  const trimmedToken = token.trim();
+  if (!trimmedToken) {
+    throw new ApiError('Secure token is required.');
+  }
+
+  const formData = new FormData();
+  formData.append('vendorName', payload.vendorName);
+  formData.append('method', payload.method ?? 'FORM');
+  formData.append('currency', payload.currency ?? 'USD');
+  if (payload.contactName) formData.append('contactName', payload.contactName);
+  if (payload.contactEmail) formData.append('contactEmail', payload.contactEmail);
+  if (payload.contactPhone) formData.append('contactPhone', payload.contactPhone);
+  if (payload.notes) formData.append('notes', payload.notes);
+  if (payload.lines) {
+    formData.append('lines', JSON.stringify(payload.lines));
+  }
+  if (logoFile) {
+    formData.append('logo', logoFile);
+  }
+
+  const { data } = await apiClient.post(
+    `/secure-links/${encodeURIComponent(trimmedToken)}/quotations`,
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+
+  return data as { quotation: { quotationLink: string; vendorName: string; method: string; createdAt: string } };
+};
+
+// ======================================
+// Admin Quotation Helpers
+// ======================================
+export const adminUpdateQuotation = async (
+  id: string,
+  payload: AdminQuotationUpdateRequest
+): Promise<AdminQuotationDetails> => {
+  const { data } = await apiClient.patch(`/admin/quotations/${id}`, payload, {
+    headers: adminHeaders(),
+  });
+  return data;
+};
+
+export const adminDeleteQuotation = async (id: string): Promise<{ message: string }> => {
+  const { data } = await apiClient.delete(`/admin/quotations/${id}`, {
+    headers: adminHeaders(),
+  });
+  return data;
+};
+
+export const adminUpdateQuotationStatus = async (
+  id: string,
+  status: 'APPROVED' | 'REJECTED' | 'CUSTOMER_ACCEPTED',
+  reason?: string
+): Promise<{
+  updated: true;
+  quotation: AdminQuotationDetails;
+  emailed: { vendor: boolean; rfqContact: boolean };
+  emailedWarning?: { message: string } | null;
+}> => {
+  const { data } = await apiClient.patch(
+    `/admin/quotations/${id}/status`,
+    { status, reason },
+    { headers: adminHeaders() }
+  );
+  return data;
+};
+
+export const updateRfqTkmrContact = async (
+  rfqId: string,
+  payload: { name: string; email: string; phone: string }
+): Promise<{
+  rfq: {
+    id: string;
+    publicId: string | null;
+    tkmrContactName: string | null;
+    tkmrContactEmail: string | null;
+    tkmrContactPhone: string | null;
+  };
+}> => {
+  const { data } = await apiClient.patch(
+    `/admin/rfqs/${rfqId}/tkmr-contact`,
+    payload,
+    { headers: adminHeaders() }
+  );
+  return data;
 };
 
 export default apiClient;

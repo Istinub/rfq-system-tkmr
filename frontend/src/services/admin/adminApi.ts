@@ -8,6 +8,13 @@ import type {
   AdminSettings,
   AdminStatsResponse,
   AdminTokenRow,
+  AdminSubmissionToken,
+  AdminSubmissionTokenCreateRequest,
+  AdminSubmissionTokenCreateResponse,
+  AdminSubmissionTokenUpdateRequest,
+  AdminQuotationDetails,
+  AdminQuotationSummary,
+  AdminQuotationUpdateRequest,
 } from './types';
 
 export const ADMIN_API_KEY_STORAGE_KEY = 'ADMIN_API_KEY';
@@ -54,10 +61,41 @@ const unwrap = async <T>(promise: Promise<AxiosResponse<T>>): Promise<T> => {
   return data;
 };
 
+const normalizeSubmissionTokens = (data: unknown): AdminSubmissionToken[] => {
+  if (Array.isArray(data)) return data as AdminSubmissionToken[];
+
+  if (data && typeof data === 'object') {
+    const candidate = data as Record<string, unknown>;
+    const maybeArrays = ['tokens', 'data', 'items'] as const;
+
+    for (const key of maybeArrays) {
+      const value = candidate[key];
+      if (Array.isArray(value)) {
+        return value as AdminSubmissionToken[];
+      }
+    }
+  }
+
+  throw new Error('Invalid submission tokens response shape');
+};
+
 export const getStats = () => unwrap<AdminStatsResponse>(adminApiClient.get('/stats'));
 export const getRfqs = () => unwrap<AdminRfqSummary[]>(adminApiClient.get('/rfqs'));
 export const getRfq = (id: string | number) => unwrap<AdminRfqDetails>(adminApiClient.get(`/rfqs/${id}`));
 export const deleteRfq = (id: string | number) => unwrap<void>(adminApiClient.delete(`/rfqs/${id}`));
+export const updateRfqTkmrContact = (
+  id: string | number,
+  payload: { name: string; email: string; phone: string }
+) =>
+  unwrap<{
+    rfq: {
+      id: string;
+      publicId: string | null;
+      tkmrContactName: string | null;
+      tkmrContactEmail: string | null;
+      tkmrContactPhone: string | null;
+    };
+  }>(adminApiClient.patch(`/rfqs/${id}/tkmr-contact`, payload));
 export const getTokens = () => unwrap<AdminTokenRow[]>(adminApiClient.get('/tokens'));
 export const disableToken = (tokenId: string | number) =>
   unwrap<AdminTokenRow>(adminApiClient.post(`/tokens/${tokenId}/disable`));
@@ -68,3 +106,28 @@ export const getSettings = () => unwrap<AdminSettings>(adminApiClient.get('/sett
 export const updateSettings = (payload: AdminSettings) => unwrap<AdminSettings>(adminApiClient.post('/settings', payload));
 export const generateSecureLink = (rfqId: string | number) =>
   unwrap<{ secureLink: AdminSecureLinkMeta }>(secureLinkApiClient.post(`/secure-link/${rfqId}`));
+export const getQuotations = () => unwrap<AdminQuotationSummary[]>(adminApiClient.get('/quotations'));
+export const getQuotation = (id: string) => unwrap<AdminQuotationDetails>(adminApiClient.get(`/quotations/${id}`));
+export const updateQuotation = (id: string, payload: AdminQuotationUpdateRequest) =>
+  unwrap<AdminQuotationDetails>(adminApiClient.patch(`/quotations/${id}`, payload));
+export const regenerateQuotationPdf = (id: string) =>
+  unwrap<AdminQuotationDetails>(adminApiClient.post(`/quotations/${id}/regenerate-pdf`));
+export const deleteQuotation = (id: string) =>
+  unwrap<{ message: string }>(adminApiClient.delete(`/quotations/${id}`));
+
+export const listSubmissionTokens = async () => {
+  const { data } = await adminApiClient.get<unknown>('/submission-tokens');
+  return normalizeSubmissionTokens(data);
+};
+
+export const createSubmissionToken = (payload: AdminSubmissionTokenCreateRequest) =>
+  unwrap<AdminSubmissionTokenCreateResponse>(adminApiClient.post('/submission-tokens', payload));
+
+export const updateSubmissionToken = (id: string, payload: AdminSubmissionTokenUpdateRequest) =>
+  unwrap<AdminSubmissionToken>(adminApiClient.patch(`/submission-tokens/${id}`, payload));
+
+export const revokeSubmissionToken = (id: string) =>
+  unwrap<AdminSubmissionToken>(adminApiClient.post(`/submission-tokens/${id}/revoke`));
+
+export const deleteSubmissionToken = (id: string) =>
+  unwrap<void>(adminApiClient.delete(`/submission-tokens/${id}`));

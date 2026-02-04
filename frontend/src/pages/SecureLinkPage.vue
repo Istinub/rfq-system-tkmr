@@ -97,26 +97,187 @@
                     </q-item>
                   </q-list>
                 </section>
+
+              </div>
+            </q-card-section>
+
+            <q-card-section v-if="uiState === 'valid' && rfq">
+              <div class="q-gutter-md">
+                <div class="text-h6 text-weight-bold">Quotation</div>
+                <div class="row items-center q-gutter-sm">
+                  <q-btn color="primary" label="Create quotation" @click="quoteDialog = true" />
+                  <q-btn outline color="primary" label="Email quotation" :href="mailtoHref" />
+                </div>
+                <q-banner dense class="bg-blue-1 text-blue-9">
+                  You can create and submit your quotation by using the 'Create quotation' button above.
+                  Alternatively, you may send your quotation via email using the Email button,
+                  or manually email your quotation to rfqtkmr@gmail.com.
+                </q-banner>
+                <div class="text-caption text-grey-7">
+                  <div class="text-weight-medium">TKMR Contact Details</div>
+                  <div>TKMR Marine &amp; Offshore Engineering Pte. Ltd.</div>
+                  <div>Email: rfqtkmr@gmail.com</div>
+                  <!-- Phone: -->
+                </div>
               </div>
             </q-card-section>
           </template>
-
-          <q-card-actions align="right">
-            <q-btn flat color="primary" icon="home" label="Back to form" to="/" />
-          </q-card-actions>
         </q-card>
       </div>
     </div>
+
+    <q-dialog v-model="quoteDialog" persistent>
+      <q-card class="quote-dialog-card q-pa-md">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">Quotation</div>
+          <q-space />
+          <q-btn dense flat round icon="close" @click="quoteDialog = false" />
+        </q-card-section>
+
+        <q-card-section class="q-gutter-md q-mt-md">
+          <div class="q-gutter-md">
+            <div class="text-subtitle1 text-weight-bold">Vendor Information</div>
+            <q-separator spaced />
+            <div class="row q-col-gutter-md">
+              <div class="col-12 col-md-6">
+                <q-input v-model="quotationForm.vendorName" label="Vendor name" dense outlined required />
+              </div>
+              <div class="col-12 col-md-6">
+                <q-input v-model="quotationForm.contactName" label="Contact name" dense outlined />
+              </div>
+              <div class="col-12 col-md-6">
+                <q-input v-model="quotationForm.contactEmail" label="Contact email" type="email" dense outlined />
+              </div>
+              <div class="col-12 col-md-6">
+                <q-input v-model="quotationForm.contactPhone" label="Contact phone" dense outlined />
+              </div>
+            </div>
+          </div>
+
+          <div class="logo-upload">
+            <div class="text-subtitle2 text-weight-medium">You can upload a Company Logo</div>
+            <input
+              ref="logoInput"
+              type="file"
+              class="hidden"
+              accept="image/png, image/jpeg, image/webp"
+              @change="onLogoSelected"
+            />
+            <q-btn
+              outline
+              color="primary"
+              label="Upload Company Logo (optional)"
+              @click="triggerLogoUpload"
+            />
+            <div v-if="logoPreviewUrl" class="q-mt-xs">
+              <img :src="logoPreviewUrl" alt="Selected logo" class="logo-preview" />
+              <div>
+                <q-btn
+                  flat
+                  dense
+                  color="grey-7"
+                  label="Remove logo"
+                  @click="removeLogo"
+                />
+              </div>
+            </div>
+            <div class="text-caption text-grey-7">
+              This logo will appear on the generated quotation PDF.
+            </div>
+          </div>
+
+          <div class="q-gutter-md">
+            <div class="row items-center justify-between q-col-gutter-sm">
+              <div class="col-auto text-subtitle1 text-weight-bold">Quoted Items</div>
+              <div class="col-auto">
+                <q-select
+                  v-model="quotationForm.currency"
+                  :options="currencyOptions"
+                  label="Currency"
+                  dense
+                  outlined
+                />
+              </div>
+            </div>
+            <div class="text-caption text-grey-7">
+              All prices should be entered in the selected currency.
+            </div>
+            <q-separator spaced />
+            <q-table
+              class="q-mt-sm"
+              flat
+              square
+              hide-bottom
+              :rows="rfq?.items || []"
+              :columns="itemColumns"
+              row-key="id"
+            >
+              <template #body-cell-unitPrice="props">
+                <q-td :props="props">
+                  <q-input
+                    v-model.number="quotationForm.lines[props.rowIndex].unitPrice"
+                    type="number"
+                    min="0"
+                    dense
+                    outlined
+                    step="0.01"
+                    :disable="quoteSubmitLoading"
+                    :placeholder="`Unit price for ${props.row.name}`"
+                  />
+                </q-td>
+              </template>
+              <template #body-cell-lineTotal="props">
+                <q-td :props="props">
+                  {{ formatCurrency(displayLineTotal(props.rowIndex)) }}
+                </q-td>
+              </template>
+            </q-table>
+
+            <div class="row justify-end text-weight-bold q-mt-md">
+              <div class="col-auto">Subtotal: {{ formatCurrency(totalAmount) }}</div>
+            </div>
+          </div>
+
+          <div class="q-gutter-md">
+            <div class="text-subtitle1 text-weight-bold">Additional Notes</div>
+            <q-separator spaced />
+            <div class="row q-col-gutter-md">
+              <div class="col-12">
+                <q-input
+                  v-model="quotationForm.notes"
+                  type="textarea"
+                  label="Notes (optional)"
+                  outlined
+                  dense
+                  autogrow
+                />
+              </div>
+            </div>
+          </div>
+        </q-card-section>
+
+        <q-separator spaced />
+
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" color="primary" v-close-popup />
+          <q-btn color="primary" label="Submit Quotation" :loading="quoteSubmitLoading" :disable="quoteSubmitLoading" @click="onDialogSubmit" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { ApiError, getSecureLinkDetails, type SecureLinkDetailsResponse } from '../services/api';
+import { ApiError, getSecureLinkDetails, submitQuotation, type SecureLinkDetailsResponse } from '../services/api';
+import type { QTableProps } from 'quasar';
+import { useQuasar } from 'quasar';
 import type { RFQ } from '@rfq-system/shared';
 
 type SecureLinkState = 'loading' | 'valid' | 'expired' | 'invalid' | 'already-used' | 'error';
+
+type RfqItem = RFQ['items'][number];
 
 type StateContext = {
   title: string;
@@ -132,6 +293,61 @@ const secureLink = ref<SecureLinkDetailsResponse['secureLink'] | null>(null);
 const isLoading = ref(false);
 const uiState = ref<SecureLinkState>('loading');
 const stateOverride = ref<Partial<StateContext> | null>(null);
+const quoteSubmitLoading = ref(false);
+const currencyOptions = ['USD', 'AUD', 'SGD', 'EUR'];
+const quoteDialog = ref(false);
+const $q = useQuasar();
+const logoInput = ref<HTMLInputElement | null>(null);
+const logoPreviewUrl = ref('');
+const quotationForm = reactive({
+  vendorName: '',
+  currency: 'USD',
+  contactName: '',
+  contactEmail: '',
+  contactPhone: '',
+  notes: '',
+  logoFile: null as File | null,
+  lines: [] as Array<{ rfqItemId: string; unitPrice: number }>,
+});
+
+const triggerLogoUpload = () => {
+  logoInput.value?.click();
+};
+
+const onLogoSelected = (event: Event) => {
+  const target = event.target as HTMLInputElement | null;
+  const file = target?.files?.[0] ?? null;
+  quotationForm.logoFile = file;
+};
+
+const removeLogo = () => {
+  quotationForm.logoFile = null;
+  if (logoInput.value) {
+    logoInput.value.value = '';
+  }
+};
+
+watch(
+  () => quotationForm.logoFile,
+  (next, previous) => {
+    if (logoPreviewUrl.value) {
+      URL.revokeObjectURL(logoPreviewUrl.value);
+      logoPreviewUrl.value = '';
+    }
+    if (next) {
+      logoPreviewUrl.value = URL.createObjectURL(next);
+    }
+    if (!next && previous && logoInput.value) {
+      logoInput.value.value = '';
+    }
+  }
+);
+
+onUnmounted(() => {
+  if (logoPreviewUrl.value) {
+    URL.revokeObjectURL(logoPreviewUrl.value);
+  }
+});
 
 const STATE_CONTEXT: Record<SecureLinkState, StateContext> = {
   loading: {
@@ -220,6 +436,15 @@ const handleSecureLinkError = (error: unknown) => {
           body: 'We could not validate this link because the token is invalid.',
         });
         return;
+      case 409:
+        applyState('invalid', {
+          title: 'TKMR contact not configured',
+          body: 'This secure link is not ready yet because TKMR contact details are missing.',
+          guidance: 'Please contact TKMR to configure the contact details and re-open the link.',
+          icon: 'warning_amber',
+          variantClass: 'status-banner--warning',
+        });
+        return;
       case 404:
         applyState('invalid', {
           title: 'Secure link not found',
@@ -291,6 +516,111 @@ const linkMeta = computed(() => {
   };
 });
 
+const itemColumns: QTableProps['columns'] = [
+  { name: 'name', label: 'Item', field: 'name', align: 'left' },
+  { name: 'quantity', label: 'Qty', field: 'quantity', align: 'right' },
+  { name: 'unitPrice', label: 'Unit Price', field: 'unitPrice', align: 'right' },
+  { name: 'lineTotal', label: 'Line Total', field: 'lineTotal', align: 'right' },
+];
+
+const syncLinesWithItems = () => {
+  if (!rfq.value) return;
+  quotationForm.lines = rfq.value.items.map((item: RfqItem) => ({ rfqItemId: item.id, unitPrice: quotationForm.lines.find((l) => l.rfqItemId === item.id)?.unitPrice ?? 0 }));
+};
+
+const displayLineTotal = (index: number): number => {
+  if (!rfq.value) return 0;
+  const item = rfq.value.items[index];
+  const line = quotationForm.lines[index];
+  if (!item || !line) return 0;
+  return item.quantity * (line.unitPrice || 0);
+};
+
+const totalAmount = computed(() => {
+  if (!rfq.value) return 0;
+  return rfq.value.items.reduce((sum: number, _item: RfqItem, idx: number) => sum + displayLineTotal(idx), 0);
+});
+
+const formatCurrency = (value: number) => {
+  const currency = quotationForm.currency || 'USD';
+  const formatter = new Intl.NumberFormat(undefined, { style: 'currency', currency, minimumFractionDigits: 2 });
+  return formatter.format(Number.isFinite(value) ? value : 0);
+};
+
+const mailtoHref = computed(() => {
+  if (!rfq.value) return '#';
+  const rfqRef = rfq.value.publicId || 'RFQ Reference unavailable';
+  const subject = encodeURIComponent(`Quotation for ${rfqRef}`);
+
+  const bodyLines = [] as string[];
+  const vendorName = quotationForm.vendorName?.trim();
+  if (vendorName) {
+    bodyLines.push(`Vendor: ${vendorName}`);
+  }
+  bodyLines.push(`RFQ Reference: ${rfqRef}`);
+  bodyLines.push(`Company: ${rfq.value?.company || ''}`);
+  bodyLines.push('Details: Please find our quotation attached.');
+
+  const body = encodeURIComponent(bodyLines.join('\n'));
+  return `mailto:rfqtkmr@gmail.com?subject=${subject}&body=${body}`;
+});
+
+watch(
+  () => rfq.value,
+  (next) => {
+    if (next) {
+      syncLinesWithItems();
+    }
+  }
+);
+
+const validateForm = () => {
+  if (!quotationForm.vendorName.trim()) {
+    $q.notify({ type: 'negative', message: 'Vendor name is required.' });
+    return false;
+  }
+  const hasMissing = quotationForm.lines.some((line) => !line || Number.isNaN(line.unitPrice));
+  if (hasMissing) {
+    $q.notify({ type: 'negative', message: 'Please provide unit prices for all items.' });
+    return false;
+  }
+  return true;
+};
+
+const onDialogSubmit = async () => {
+  if (!token.value || !rfq.value) return;
+  if (!validateForm()) {
+    return;
+  }
+  quoteSubmitLoading.value = true;
+  try {
+    const payload = {
+      vendorName: quotationForm.vendorName.trim(),
+      method: 'FORM' as const,
+      currency: quotationForm.currency,
+      contactName: quotationForm.contactName || undefined,
+      contactEmail: quotationForm.contactEmail || undefined,
+      contactPhone: quotationForm.contactPhone || undefined,
+      notes: quotationForm.notes || undefined,
+      lines: quotationForm.lines.map((line) => ({ rfqItemId: line.rfqItemId, unitPrice: Number(line.unitPrice) || 0 })),
+    };
+
+    const response = await submitQuotation(token.value, payload, quotationForm.logoFile);
+    quoteDialog.value = false;
+    const link = response?.quotation?.quotationLink;
+    $q.notify({
+      type: 'positive',
+      message: 'Quotation submitted successfully',
+      actions: link ? [{ label: 'Open', color: 'white', handler: () => window.open(link, '_blank') }] : undefined,
+    });
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Failed to submit quotation.';
+    $q.notify({ type: 'negative', message });
+  } finally {
+    quoteSubmitLoading.value = false;
+  }
+};
+
 onMounted(() => {
   if (token.value) {
     void fetchSecureLink(token.value);
@@ -333,6 +663,23 @@ watch(
   background: linear-gradient(120deg, #1d4ed8, #0ea5e9);
 }
 
+.logo-preview {
+  max-height: 60px;
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.logo-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px dashed rgba(148, 163, 184, 0.7);
+  border-radius: 12px;
+  background: rgba(219, 234, 254, 0.35);
+}
+
 .status-banner {
   border-radius: 16px;
   border: 1px solid transparent;
@@ -365,6 +712,25 @@ watch(
 
 .valid-banner {
   margin-bottom: 12px;
+}
+
+.quote-dialog-card {
+  max-width: 720px;
+  width: 100%;
+}
+
+@media (max-width: 599px) {
+  .quote-dialog-card {
+    max-width: 100vw;
+    width: 100vw;
+    border-radius: 0;
+  }
+
+  .quote-dialog-card .q-card__section,
+  .quote-dialog-card .q-card__actions {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
 }
 
 @media (max-width: 767px) {
