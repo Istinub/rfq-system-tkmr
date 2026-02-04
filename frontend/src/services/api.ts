@@ -313,4 +313,24 @@ export const adminUpdateQuotationStatus = async (
   return data;
 };
 
+export const updateRfqTkmrContact = async (
+  rfqId: string,
+  payload: { name: string; email: string; phone: string }
+): Promise<{
+  rfq: {
+    id: string;
+    publicId: string | null;
+    tkmrContactName: string | null;
+    tkmrContactEmail: string | null;
+    tkmrContactPhone: string | null;
+  };
+}> => {
+  const { data } = await apiClient.patch(
+    `/admin/rfqs/${rfqId}/tkmr-contact`,
+    payload,
+    { headers: adminHeaders() }
+  );
+  return data;
+};
+
 export default apiClient;

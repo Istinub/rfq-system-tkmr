@@ -26,6 +26,7 @@ import {
   regenerateAdminQuotationPdf,
   rejectAdminQuotation,
   regenerateAdminToken,
+  updateAdminRfqTkmrContact,
   updateAdminQuotationStatus,
   updateAdminQuotation,
   updateAdminQuotationById,
@@ -39,6 +40,7 @@ router.use(apiKeyAuth);
 router.get('/stats', getAdminStats);
 router.get('/rfqs', listAdminRfqs);
 router.get('/rfqs/:id', getAdminRfqById);
+router.patch('/rfqs/:id/tkmr-contact', updateAdminRfqTkmrContact);
 router.get('/rfqs/:id/quotations', listAdminQuotations);
 router.get('/quotations', listAdminQuotationIndex);
 router.get('/quotations/:id', getAdminQuotationById);

@@ -66,6 +66,47 @@
                 </div>
               </q-card-section>
             </q-card>
+
+            <q-card class="detail-card q-mt-md">
+              <q-card-section>
+                <div class="text-h6">TKMR Contact</div>
+                <div class="text-caption text-grey-6">Details shown to vendors on secure links</div>
+              </q-card-section>
+              <q-separator />
+              <q-card-section class="q-gutter-md">
+                <q-input
+                  v-model="tkmrContactForm.name"
+                  label="Name"
+                  dense
+                  outlined
+                />
+                <q-input
+                  v-model="tkmrContactForm.email"
+                  label="Email"
+                  type="email"
+                  dense
+                  outlined
+                />
+                <q-input
+                  v-model="tkmrContactForm.phone"
+                  label="Phone"
+                  dense
+                  outlined
+                />
+                <div v-if="tkmrContactMissing" class="text-caption text-warning">
+                  TKMR contact details are required before generating a secure link.
+                </div>
+              </q-card-section>
+              <q-card-actions align="right">
+                <q-btn
+                  color="primary"
+                  label="Save TKMR Contact"
+                  :loading="tkmrContactSaving"
+                  :disable="tkmrContactSaving"
+                  @click="handleSaveTkmrContact"
+                />
+              </q-card-actions>
+            </q-card>
           </div>
 
           <div class="col-12 col-md-6" v-if="secureLink">
@@ -137,7 +178,7 @@
                   color="primary"
                   label="Generate Secure Link"
                   :loading="generateLoading"
-                  :disable="generateLoading"
+                  :disable="generateLoading || tkmrContactMissing"
                   @click="handleGenerateSecureLink"
                 />
               </q-card-section>
@@ -212,12 +253,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { Notify } from 'quasar';
 import { useAdminRfqsStore } from '../../stores/admin/adminRfqs';
 import type { AdminAttachment } from '../../services/admin/types';
+import { updateRfqTkmrContact } from '../../services/admin/adminApi';
 
 const route = useRoute();
 const routeId = route.params.id as string;
@@ -300,6 +342,33 @@ const linkStatusClass = computed(() => {
 
 const actionLoading = ref(false);
 const generateLoading = ref(false);
+const tkmrContactSaving = ref(false);
+const tkmrContactForm = ref({
+  name: '',
+  email: '',
+  phone: '',
+});
+
+const tkmrContactMissing = computed(() => {
+  const { name, email, phone } = tkmrContactForm.value;
+  return !name.trim() || !email.trim() || !phone.trim();
+});
+
+watch(
+  rfq,
+  (next) => {
+    if (!next) {
+      tkmrContactForm.value = { name: '', email: '', phone: '' };
+      return;
+    }
+    tkmrContactForm.value = {
+      name: next.tkmrContactName ?? '',
+      email: next.tkmrContactEmail ?? '',
+      phone: next.tkmrContactPhone ?? '',
+    };
+  },
+  { immediate: true }
+);
 
 const openSecureLink = () => {
   if (!canOpenSecureLink.value || !secureLinkUrl.value) {
@@ -359,6 +428,32 @@ const handleGenerateSecureLink = async () => {
     // store handles notifications via handleAdminError
   } finally {
     generateLoading.value = false;
+  }
+};
+
+const handleSaveTkmrContact = async () => {
+  if (!rfq.value) return;
+  tkmrContactSaving.value = true;
+  try {
+    const { rfq: updated } = await updateRfqTkmrContact(rfq.value.id, {
+      name: tkmrContactForm.value.name,
+      email: tkmrContactForm.value.email,
+      phone: tkmrContactForm.value.phone,
+    });
+    if (currentRfq.value) {
+      currentRfq.value = {
+        ...currentRfq.value,
+        tkmrContactName: updated.tkmrContactName,
+        tkmrContactEmail: updated.tkmrContactEmail,
+        tkmrContactPhone: updated.tkmrContactPhone,
+      };
+    }
+    Notify.create({ type: 'positive', message: 'TKMR contact updated' });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to update TKMR contact.';
+    Notify.create({ type: 'negative', message });
+  } finally {
+    tkmrContactSaving.value = false;
   }
 };
 

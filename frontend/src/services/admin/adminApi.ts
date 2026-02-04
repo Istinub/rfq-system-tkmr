@@ -83,6 +83,19 @@ export const getStats = () => unwrap<AdminStatsResponse>(adminApiClient.get('/st
 export const getRfqs = () => unwrap<AdminRfqSummary[]>(adminApiClient.get('/rfqs'));
 export const getRfq = (id: string | number) => unwrap<AdminRfqDetails>(adminApiClient.get(`/rfqs/${id}`));
 export const deleteRfq = (id: string | number) => unwrap<void>(adminApiClient.delete(`/rfqs/${id}`));
+export const updateRfqTkmrContact = (
+  id: string | number,
+  payload: { name: string; email: string; phone: string }
+) =>
+  unwrap<{
+    rfq: {
+      id: string;
+      publicId: string | null;
+      tkmrContactName: string | null;
+      tkmrContactEmail: string | null;
+      tkmrContactPhone: string | null;
+    };
+  }>(adminApiClient.patch(`/rfqs/${id}/tkmr-contact`, payload));
 export const getTokens = () => unwrap<AdminTokenRow[]>(adminApiClient.get('/tokens'));
 export const disableToken = (tokenId: string | number) =>
   unwrap<AdminTokenRow>(adminApiClient.post(`/tokens/${tokenId}/disable`));

@@ -58,6 +58,8 @@ const serializeToken = (link: SecureLink & { rfq?: { publicId: string | null } |
   };
 };
 
+const isoOrNull = (value?: Date | null) => (value ? value.toISOString() : null);
+
 const latestSecureLinkInclude = {
   secureLinks: {
     orderBy: { createdAt: 'desc' },
@@ -105,11 +107,11 @@ const serializeRfqSummary = (
     submittedByToken: rfq.submittedByToken
       ? {
           id: rfq.submittedByToken.id,
-          createdAt: rfq.submittedByToken.createdAt.toISOString(),
-          expiresAt: rfq.submittedByToken.expiresAt.toISOString(),
+          createdAt: isoOrNull(rfq.submittedByToken.createdAt),
+          expiresAt: isoOrNull(rfq.submittedByToken.expiresAt),
           maxUses: rfq.submittedByToken.maxUses,
           uses: rfq.submittedByToken.uses,
-          revokedAt: rfq.submittedByToken.revokedAt?.toISOString() ?? null,
+          revokedAt: isoOrNull(rfq.submittedByToken.revokedAt),
         }
       : null,
     tokenStatus: resolveTokenStatus(latestLink),
@@ -134,17 +136,23 @@ const serializeRfqDetails = (
     contactName: rfq.contactName,
     contactEmail: rfq.contactEmail,
     contactPhone: rfq.contactPhone ?? null,
+    tkmrContactName: rfq.tkmrContactName ?? null,
+    tkmrContactEmail: rfq.tkmrContactEmail ?? null,
+    tkmrContactPhone: rfq.tkmrContactPhone ?? null,
+    clientContactName: rfq.clientContactName ?? null,
+    clientContactEmail: rfq.clientContactEmail ?? null,
+    clientContactPhone: rfq.clientContactPhone ?? null,
     createdAt: rfq.createdAt.toISOString(),
     submittedByType: rfq.submittedByType,
     submittedByTokenId: rfq.submittedByTokenId ?? null,
     submittedByToken: rfq.submittedByToken
       ? {
           id: rfq.submittedByToken.id,
-          createdAt: rfq.submittedByToken.createdAt.toISOString(),
-          expiresAt: rfq.submittedByToken.expiresAt.toISOString(),
+          createdAt: isoOrNull(rfq.submittedByToken.createdAt),
+          expiresAt: isoOrNull(rfq.submittedByToken.expiresAt),
           maxUses: rfq.submittedByToken.maxUses,
           uses: rfq.submittedByToken.uses,
-          revokedAt: rfq.submittedByToken.revokedAt?.toISOString() ?? null,
+          revokedAt: isoOrNull(rfq.submittedByToken.revokedAt),
         }
       : null,
     tokenStatus: resolveTokenStatus(latestLink),
@@ -165,11 +173,11 @@ const serializeRfqDetails = (
       ? {
           id: latestLink.id,
           token: latestLink.token,
-          createdAt: latestLink.createdAt.toISOString(),
-          expiresAt: latestLink.expiresAt.toISOString(),
+          createdAt: isoOrNull(latestLink.createdAt),
+          expiresAt: isoOrNull(latestLink.expiresAt),
           accessCount: latestLink.accessCount,
           status: resolveTokenStatus(latestLink),
-          lastAccessAt: latestLink.firstAccessAt?.toISOString() ?? null,
+          lastAccessAt: isoOrNull(latestLink.firstAccessAt),
           disabled: latestLink.disabled,
         }
       : null,
@@ -962,8 +970,17 @@ export const listAdminRfqs: RequestHandler = async (_req, res) => {
     });
 
     return res.json(rfqs.map(serializeRfqSummary));
-  } catch (error) {
-    return handleError(res, error);
+  } catch (err) {
+    const errorId = randomUUID();
+    console.error('[GET /api/admin/rfqs]', {
+      errorId,
+      name: (err as any)?.name,
+      message: (err as any)?.message,
+      stack: (err as any)?.stack,
+      prismaCode: err instanceof Prisma.PrismaClientKnownRequestError ? err.code : undefined,
+      prismaMeta: err instanceof Prisma.PrismaClientKnownRequestError ? err.meta : undefined,
+    });
+    return res.status(500).json({ errorId, message: 'Internal server error' });
   }
 };
 
@@ -983,6 +1000,48 @@ export const getAdminRfqById: RequestHandler = async (req, res) => {
 
     return res.json(serializeRfqDetails(rfq));
   } catch (error) {
+    return handleError(res, error);
+  }
+};
+
+export const updateAdminRfqTkmrContact: RequestHandler = async (req, res) => {
+  const id = ensureIdParam(req.params.id);
+
+  if (!id) {
+    return res.status(400).json({ message: 'RFQ id is required' });
+  }
+
+  const payload = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
+  const name = typeof payload.name === 'string' ? payload.name.trim() : '';
+  const email = typeof payload.email === 'string' ? payload.email.trim() : '';
+  const phone = typeof payload.phone === 'string' ? payload.phone.trim() : '';
+
+  if (!name || !email || !phone) {
+    return res.status(400).json({ message: 'name, email, and phone are required' });
+  }
+
+  try {
+    const updated = await prisma.rFQ.update({
+      where: { id },
+      data: {
+        tkmrContactName: name,
+        tkmrContactEmail: email,
+        tkmrContactPhone: phone,
+      },
+      select: {
+        id: true,
+        publicId: true,
+        tkmrContactName: true,
+        tkmrContactEmail: true,
+        tkmrContactPhone: true,
+      },
+    });
+
+    return res.json({ rfq: updated });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      return res.status(404).json({ message: 'RFQ not found' });
+    }
     return handleError(res, error);
   }
 };

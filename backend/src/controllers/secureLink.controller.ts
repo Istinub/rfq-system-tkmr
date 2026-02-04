@@ -90,9 +90,9 @@ const serializeRfq = (rfq: SecureLinkRFQ) => ({
   id: rfq.id,
   publicId: rfq.publicId ?? null,
   company: rfq.company,
-  contactName: rfq.contactName,
-  contactEmail: rfq.contactEmail,
-  contactPhone: rfq.contactPhone ?? null,
+  contactName: rfq.tkmrContactName ?? null,
+  contactEmail: rfq.tkmrContactEmail ?? null,
+  contactPhone: rfq.tkmrContactPhone ?? null,
   createdAt: rfq.createdAt.toISOString(),
   items: rfq.items.map((item: SecureLinkRFQItem) => ({
     id: item.id,
@@ -141,6 +141,25 @@ export const generateSecureLink: RequestHandler = async (req, res) => {
   }
 
   try {
+    const rfq = await prismaClient.rFQ.findUnique({
+      where: { id: rfqId },
+      select: {
+        tkmrContactName: true,
+        tkmrContactEmail: true,
+        tkmrContactPhone: true,
+      },
+    });
+
+    const tkmrContactName = rfq?.tkmrContactName?.trim() ?? '';
+    const tkmrContactEmail = rfq?.tkmrContactEmail?.trim() ?? '';
+    const tkmrContactPhone = rfq?.tkmrContactPhone?.trim() ?? '';
+
+    if (!tkmrContactName || !tkmrContactEmail || !tkmrContactPhone) {
+      return res.status(400).json({
+        message: 'TKMR contact details are required before generating a secure link.',
+      });
+    }
+
     const token = crypto.randomBytes(TOKEN_BYTES).toString('hex');
     const ttlMs = parseTtl(req.body?.ttlMs);
     const expiresAt = new Date(Date.now() + ttlMs);
@@ -204,6 +223,25 @@ export const resolveSecureLinkByToken: RequestHandler = async (req, res) => {
 
     secureLinkId = secureLink.id;
     rfqId = secureLink.rfqId;
+    console.log('[GET /api/secure-links/:token] loaded', {
+      token,
+      status: secureLink.disabled ? 'disabled' : secureLink.expiresAt <= new Date() ? 'expired' : 'active',
+      rfqId: secureLink.rfqId,
+      rfqPublicId: secureLink.rfq?.publicId ?? null,
+      tkmrContactName: secureLink.rfq?.tkmrContactName ?? null,
+      tkmrContactEmail: secureLink.rfq?.tkmrContactEmail ?? null,
+      tkmrContactPhone: secureLink.rfq?.tkmrContactPhone ?? null,
+    });
+
+    const tkmrContactName = secureLink.rfq?.tkmrContactName?.trim() ?? '';
+    const tkmrContactEmail = secureLink.rfq?.tkmrContactEmail?.trim() ?? '';
+    const tkmrContactPhone = secureLink.rfq?.tkmrContactPhone?.trim() ?? '';
+
+    if (!tkmrContactName || !tkmrContactEmail || !tkmrContactPhone) {
+      return res.status(409).json({
+        message: 'TKMR contact details are not configured for this RFQ yet. Please contact TKMR.',
+      });
+    }
 
     if (secureLink.disabled) {
       result = 'disabled';
@@ -232,10 +270,24 @@ export const resolveSecureLinkByToken: RequestHandler = async (req, res) => {
       include: secureLinkInclude,
     });
 
+    console.log('[GET /api/secure-links/:token] updated', {
+      token,
+      status: updatedSecureLink.disabled
+        ? 'disabled'
+        : updatedSecureLink.expiresAt <= new Date()
+          ? 'expired'
+          : 'active',
+      rfqId: updatedSecureLink.rfqId,
+      rfqPublicId: updatedSecureLink.rfq?.publicId ?? null,
+      tkmrContactName: updatedSecureLink.rfq?.tkmrContactName ?? null,
+      tkmrContactEmail: updatedSecureLink.rfq?.tkmrContactEmail ?? null,
+      tkmrContactPhone: updatedSecureLink.rfq?.tkmrContactPhone ?? null,
+    });
+
     result = 'success';
 
     return res.json({
-      rfq: serializeRfq(updatedSecureLink.rfq),
+      rfq: updatedSecureLink.rfq ? serializeRfq(updatedSecureLink.rfq) : null,
       secureLink: serializeSecureLink(updatedSecureLink),
     });
   } catch (error: unknown) {

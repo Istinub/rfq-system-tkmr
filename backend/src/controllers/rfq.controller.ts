@@ -141,14 +141,24 @@ export const createRFQ: RequestHandler = async (req, res) => {
     const attachmentPayload = parseAttachments(attachments);
 
     const submissionMeta = resolveSubmission(req.submission);
+    const isAdminSubmission = submissionMeta.submittedByType === SubmittedByType.ADMIN;
+    const contactNameValue = contactName.trim();
+    const contactEmailValue = contactEmail.trim();
+    const contactPhoneValue = contactPhone?.trim() ?? null;
 
     const rfqRecord = await prisma.$transaction(async (tx: PrismaClient) => {
       const created = await tx.rFQ.create({
         data: {
           company: company.trim(),
-          contactName: contactName.trim(),
-          contactEmail: contactEmail.trim(),
-          contactPhone: contactPhone?.trim(),
+          contactName: contactNameValue,
+          contactEmail: contactEmailValue,
+          contactPhone: contactPhoneValue ?? undefined,
+          tkmrContactName: isAdminSubmission ? contactNameValue : null,
+          tkmrContactEmail: isAdminSubmission ? contactEmailValue : null,
+          tkmrContactPhone: isAdminSubmission ? contactPhoneValue : null,
+          clientContactName: isAdminSubmission ? null : contactNameValue,
+          clientContactEmail: isAdminSubmission ? null : contactEmailValue,
+          clientContactPhone: isAdminSubmission ? null : contactPhoneValue,
           ...submissionMeta,
         },
       });
@@ -325,15 +335,25 @@ export const createRFQMultipart: RequestHandler = async (req, res) => {
     const files = (req.files as Express.Multer.File[]) || [];
 
     const submissionMeta = resolveSubmission(req.submission);
+    const isAdminSubmission = submissionMeta.submittedByType === SubmittedByType.ADMIN;
+    const contactNameValue = String(contactName).trim();
+    const contactEmailValue = String(contactEmail).trim();
+    const contactPhoneValue = typeof contactPhone === 'string' ? contactPhone.trim() : null;
 
     const rfqRecord = await retryPrismaP2028(() =>
       prisma.$transaction(async (tx: PrismaClient) => {
         const created = await tx.rFQ.create({
           data: {
             company: String(company).trim(),
-            contactName: String(contactName).trim(),
-            contactEmail: String(contactEmail).trim(),
-            contactPhone: typeof contactPhone === 'string' ? contactPhone.trim() : undefined,
+            contactName: contactNameValue,
+            contactEmail: contactEmailValue,
+            contactPhone: contactPhoneValue ?? undefined,
+            tkmrContactName: isAdminSubmission ? contactNameValue : null,
+            tkmrContactEmail: isAdminSubmission ? contactEmailValue : null,
+            tkmrContactPhone: isAdminSubmission ? contactPhoneValue : null,
+            clientContactName: isAdminSubmission ? null : contactNameValue,
+            clientContactEmail: isAdminSubmission ? null : contactEmailValue,
+            clientContactPhone: isAdminSubmission ? null : contactPhoneValue,
             ...submissionMeta,
           },
         });

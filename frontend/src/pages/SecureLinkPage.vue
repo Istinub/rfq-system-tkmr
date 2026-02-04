@@ -436,6 +436,15 @@ const handleSecureLinkError = (error: unknown) => {
           body: 'We could not validate this link because the token is invalid.',
         });
         return;
+      case 409:
+        applyState('invalid', {
+          title: 'TKMR contact not configured',
+          body: 'This secure link is not ready yet because TKMR contact details are missing.',
+          guidance: 'Please contact TKMR to configure the contact details and re-open the link.',
+          icon: 'warning_amber',
+          variantClass: 'status-banner--warning',
+        });
+        return;
       case 404:
         applyState('invalid', {
           title: 'Secure link not found',

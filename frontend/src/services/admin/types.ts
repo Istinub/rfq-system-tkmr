@@ -74,6 +74,9 @@ export interface AdminSecureLinkMeta {
 
 export interface AdminRfqDetails extends AdminRfqSummary {
   contactPhone?: string | null;
+  tkmrContactName?: string | null;
+  tkmrContactEmail?: string | null;
+  tkmrContactPhone?: string | null;
   notes?: string | null;
   items: AdminRfqItem[];
   attachments: AdminAttachment[];

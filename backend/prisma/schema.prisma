@@ -14,6 +14,12 @@ model RFQ {
   contactName        String
   contactEmail       String
   contactPhone       String?
+  tkmrContactName    String?
+  tkmrContactEmail   String?
+  tkmrContactPhone   String?
+  clientContactName  String?
+  clientContactEmail String?
+  clientContactPhone String?
   createdAt          DateTime              @default(now())
   rfqNo              Int                   @unique @default(autoincrement())
   publicId           String?               @unique
