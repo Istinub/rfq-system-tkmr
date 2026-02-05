@@ -31,6 +31,8 @@ const getRfqIdFromRequest = (req: Parameters<RequestHandler>[0]): string => {
 
 const ensureToken = (token: string | undefined): string => token?.trim() ?? '';
 
+const maskToken = (token: string): string => (token ? token.slice(0, 6) : '');
+
 const getClientIp = (req: Parameters<RequestHandler>[0]): string => {
   const forwarded = req.headers['x-forwarded-for'];
   if (typeof forwarded === 'string' && forwarded.trim()) {
@@ -224,7 +226,7 @@ export const resolveSecureLinkByToken: RequestHandler = async (req, res) => {
     secureLinkId = secureLink.id;
     rfqId = secureLink.rfqId;
     console.log('[GET /api/secure-links/:token] loaded', {
-      token,
+      tokenPrefix: maskToken(token),
       status: secureLink.disabled ? 'disabled' : secureLink.expiresAt <= new Date() ? 'expired' : 'active',
       rfqId: secureLink.rfqId,
       rfqPublicId: secureLink.rfq?.publicId ?? null,
@@ -271,7 +273,7 @@ export const resolveSecureLinkByToken: RequestHandler = async (req, res) => {
     });
 
     console.log('[GET /api/secure-links/:token] updated', {
-      token,
+      tokenPrefix: maskToken(token),
       status: updatedSecureLink.disabled
         ? 'disabled'
         : updatedSecureLink.expiresAt <= new Date()
