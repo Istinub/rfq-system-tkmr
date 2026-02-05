@@ -26,6 +26,14 @@
           :rows-per-page-options="[5, 10, 20, 50]"
           class="submission-table"
         >
+          <template #body-cell-token="props">
+            <q-td :props="props">
+              <span class="font-mono">
+                {{ tokenDisplay(props.row) }}
+              </span>
+            </q-td>
+          </template>
+
           <template #body-cell-status="props">
             <q-td :props="props">
               <q-badge :color="statusConfig[statusLabel(props.row)].color" outline class="text-uppercase">
@@ -130,7 +138,7 @@
       </q-card>
     </q-dialog>
 
-    <q-dialog v-model="revealDialog">
+    <q-dialog v-model="revealDialog" @hide="hideCreatedToken">
       <q-card style="min-width: 360px; max-width: 500px;">
         <q-card-section class="text-h6">Submission Token Created</q-card-section>
         <q-card-section>
@@ -138,7 +146,7 @@
           <div class="token-box font-mono">{{ createdPlainToken }}</div>
         </q-card-section>
         <q-card-actions align="right">
-          <q-btn flat label="Close" @click="revealDialog = false" />
+          <q-btn flat label="Close" @click="closeRevealDialog" />
           <q-btn color="primary" unelevated icon="content_copy" label="Copy" @click="copyCreatedToken" />
         </q-card-actions>
       </q-card>
@@ -192,6 +200,9 @@ const deleteDialog = ref(false);
 const revealDialog = ref(false);
 
 const createdPlainToken = ref('');
+const lastCreatedTokenId = ref<string | null>(null);
+const createdTokenById = ref<Record<string, string>>({});
+const visiblePlainTokenById = ref<Record<string, boolean>>({});
 const targetToken = ref<AdminSubmissionToken | null>(null);
 
 const createForm = reactive<CreateFormState>({
@@ -215,6 +226,7 @@ const statusConfig: Record<TokenStatusKey, { label: string; color: string }> = {
 
 const columns: QTableColumn<SubmissionRow>[] = [
   { name: 'id', label: 'ID', field: 'id', align: 'left' },
+  { name: 'token', label: 'Token', field: 'id', align: 'left' },
   { name: 'createdAt', label: 'Created', field: 'createdAt', align: 'left', sortable: true },
   { name: 'expiresAt', label: 'Expires', field: 'expiresAt', align: 'left', sortable: true },
   { name: 'uses', label: 'Uses', field: 'uses', align: 'left' },
@@ -243,6 +255,20 @@ const normalizeTokens = (list: AdminSubmissionToken[]) =>
     ...token,
     status: computeStatus(token),
   }));
+
+const maskToken = (token: string) => {
+  if (!token) return 'Hidden';
+  const tail = token.slice(-3);
+  return `***${tail}`;
+};
+
+const tokenDisplay = (token: SubmissionRow) => {
+  const id = token.id;
+  const plainToken = createdTokenById.value[id];
+  if (plainToken && visiblePlainTokenById.value[id]) return plainToken;
+  if (plainToken) return maskToken(plainToken);
+  return 'Hidden';
+};
 
 const refresh = async () => {
   loading.value = true;
@@ -316,9 +342,13 @@ const handleCreate = async () => {
     };
     const response = await createSubmissionToken(payload);
     createdPlainToken.value = response.token;
+    lastCreatedTokenId.value = response.id;
+    createdTokenById.value = { ...createdTokenById.value, [response.id]: response.token };
+    visiblePlainTokenById.value = { ...visiblePlainTokenById.value, [response.id]: true };
+    tokens.value = [normalizeTokens([response])[0], ...tokens.value.filter((row) => row.id !== response.id)];
     revealDialog.value = true;
     createDialog.value = false;
-    await refresh();
+    refresh();
     $q.notify({ type: 'positive', message: 'Submission token created', position: 'top' });
   } catch (err) {
     handleAdminError(err);
@@ -391,6 +421,10 @@ const handleDelete = async () => {
   actionLoading.value = true;
   try {
     await deleteSubmissionToken(targetToken.value.id);
+    const { [targetToken.value.id]: _removedToken, ...remainingTokens } = createdTokenById.value;
+    const { [targetToken.value.id]: _removedVisible, ...remainingVisible } = visiblePlainTokenById.value;
+    createdTokenById.value = remainingTokens;
+    visiblePlainTokenById.value = remainingVisible;
     deleteDialog.value = false;
     await refresh();
     $q.notify({ type: 'positive', message: 'Submission token deleted', position: 'top' });
@@ -409,6 +443,21 @@ const copyCreatedToken = async () => {
   } catch (err) {
     $q.notify({ type: 'warning', message: 'Unable to copy token', position: 'top' });
   }
+};
+
+const hideCreatedToken = () => {
+  if (!lastCreatedTokenId.value) return;
+  if (visiblePlainTokenById.value[lastCreatedTokenId.value]) {
+    visiblePlainTokenById.value = {
+      ...visiblePlainTokenById.value,
+      [lastCreatedTokenId.value]: false,
+    };
+  }
+};
+
+const closeRevealDialog = () => {
+  revealDialog.value = false;
+  hideCreatedToken();
 };
 
 onMounted(() => {
