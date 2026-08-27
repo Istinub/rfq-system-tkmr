@@ -1,6 +1,6 @@
 # RFQ System - TKMR
 
-Monorepo for TKMR's Request for Quotation system.
+Monorepo for TKMR's Request for Quotation system. Visit: https://rfq-tkmr.netlify.app/#/
 
 ## Overview
 - Backend: Express + TypeScript + Prisma + PostgreSQL.
